@@ -256,6 +256,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
     <div class="nav-item" onclick="nav('canjes',this)"><span class="nav-icon">🏢</span>Canjes</div>
     <div class="nav-item" onclick="nav('certificados',this)"><span class="nav-icon">✓</span>Certificados</div>
     <div class="nav-item" onclick="nav('facturas',this)"><span class="nav-icon">🧾</span>Facturas</div>
+    <div class="nav-item" onclick="nav('acopios',this)"><span class="nav-icon">📦</span>Acopios</div>
   </div>
   <div class="nav-section">
     <div class="nav-label">Control</div>
@@ -442,7 +443,23 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 </div>
 
 <!-- ACOPIOS -->
-<div id="screen-acopios" class="screen" style="display:none"></div>
+<div id="screen-acopios" class="screen">
+  <div class="topbar">
+    <div class="topbar-left"><div class="title">Acopios</div><div class="title-sub">Stock de materiales en acopio</div></div>
+  </div>
+  <div class="content">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <select id="filtro-proy-acop" onchange="renderAcopios()" style="width:200px"><option value="">Todos los proyectos</option></select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr>
+        <th>N°</th><th>Proyecto</th><th>Contrato</th><th>Proveedor</th><th>Descripción</th>
+        <th>Monto</th><th>Consumido</th><th>Saldo</th><th>Estado</th><th></th>
+      </tr></thead>
+      <tbody id="acopios-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
 
 <div id="screen-facturas" class="screen">
   <div class="topbar">
