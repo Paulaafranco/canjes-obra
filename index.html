@@ -4748,24 +4748,35 @@ async function guardarPreciosRef(){
 
 // ─── INFORME GENERAL DE CONTRATOS ────────────────────────
 function generarInforme(){
+  function _fmtNum(n){ return new Intl.NumberFormat('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n||0); }
+  function _cell(txt,style){ return '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;vertical-align:top;'+(style||'')+'">'+txt+'</td>'; }
+  function _hcell(txt){ return '<th style="padding:6px 8px;border:1px solid #ccc;background:#1a3a5c;color:#fff;font-size:11px;text-align:left;white-space:nowrap">'+txt+'</th>'; }
+
   // Recopilar datos de cada contrato
   var filas=[];
   DB.contratos.forEach(function(c){
+    var mon=c.moneda||'ARS';
+    var montoTotal=parseFloat(c.monto)||0;
+    var montoCanje=parseFloat(c.montoCanje)||0;
     var pactCtaCte=parseFloat(c.montoCtaCte||c.montoDinero)||0;
-    var pactCanje=parseFloat(c.montoCanje)||0;
-    var factsC=(DB.facturas||[]).filter(function(x){ return x.contratoId===c.id; });
-    var sCtaCte, sCanje;
-    if(c.categoria==='Materiales'||factsC.length>0){
-      var cons=consumidoContrato(c);
-      sCtaCte=Math.max(0,pactCtaCte-cons.ctaCte);
-      sCanje=Math.max(0,pactCanje-cons.canje);
-    }else{
-      sCtaCte=saldoCtaCte(c);
-      sCanje=saldoCanje(c);
+    var cons=consumidoContrato(c);
+    var consumidoCtaCte=cons.ctaCte;
+    var sCtaCte=Math.max(0,pactCtaCte-consumidoCtaCte);
+    // Canje: si hay acopios, derivar de ellos
+    var acopiosC=DB.acopios.filter(function(a){ return a.contratoId===c.id; });
+    var consumidoCanje, sCanjeVal;
+    if(acopiosC.length>0){
+      consumidoCanje=acopiosC.reduce(function(s,ac){ return s+(parseFloat(ac.descontado)||0); },0);
+      sCanjeVal=acopiosC.reduce(function(s,ac){ return s+Math.max(0,montoAjustadoCAC(ac)-(parseFloat(ac.descontado)||0)); },0);
+    } else if(montoCanje>0){
+      consumidoCanje=Math.max(0,montoCanje-saldoCanje(c));
+      sCanjeVal=saldoCanje(c);
+    } else {
+      consumidoCanje=0; sCanjeVal=0;
     }
-    var esMat=c.categoria==='Materiales'||factsC.length>0;
+    var esMat=c.categoria==='Materiales'||(DB.facturas||[]).some(function(x){ return x.contratoId===c.id; });
     var precios=(c.preciosRef||[]).filter(function(p){ return p.precio>0; });
-    var saldoTotal=sCtaCte+sCanje;
+    var saldoTotal=sCtaCte+sCanjeVal;
     var refLineas=precios.map(function(p){
       var cant=p.precio>0?saldoTotal/p.precio:0;
       return p.nombre+': ~'+fmtCant(cant)+' '+(p.unidad||'u')+' (@ '+_fmtNum(p.precio)+')';
@@ -4776,15 +4787,17 @@ function generarInforme(){
       numero:c.numero||'',
       descripcion:(c.descripcion||'').substring(0,60),
       tipo:esMat?'Materiales':(c.categoria||'Obra'),
-      moneda:c.moneda||'ARS',
-      montoOriginal:parseFloat(c.monto)||0,
+      moneda:mon,
+      montoTotal:montoTotal,
       pactCtaCte:pactCtaCte,
-      pactCanje:pactCanje,
+      consumidoCtaCte:consumidoCtaCte,
       sCtaCte:sCtaCte,
-      sCanje:sCanje,
+      montoCanje:montoCanje,
+      consumidoCanje:consumidoCanje,
+      sCanjeVal:sCanjeVal,
       saldoTotal:saldoTotal,
       referencia:refLineas.join(' | '),
-      estado:c.estado||'—'
+      acopios:acopiosC
     });
   });
   // Ordenar: proyecto → número de contrato
@@ -4792,10 +4805,6 @@ function generarInforme(){
     var p=a.proyecto.localeCompare(b.proyecto,'es');
     return p!==0?p:a.numero.localeCompare(b.numero,'es');
   });
-
-  function _fmtNum(n){ return new Intl.NumberFormat('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n||0); }
-  function _cell(txt,style){ return '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;vertical-align:top;'+(style||'')+'">'+txt+'</td>'; }
-  function _hcell(txt){ return '<th style="padding:6px 8px;border:1px solid #ccc;background:#1a3a5c;color:#fff;font-size:11px;text-align:left;white-space:nowrap">'+txt+'</th>'; }
 
   // Agrupar por proyecto
   var porProy={};
@@ -4807,49 +4816,64 @@ function generarInforme(){
   var tablas='';
   Object.keys(porProy).forEach(function(proy){
     var rows=porProy[proy];
-    // Acumuladores por tipo y moneda: {ARS:{monto,sCC,sCj,st}, USD:{...}}
-    var totMat={}, totObra={};
+    var totPorMon={};
     var filaHTML=rows.map(function(f){
-      var esM=f.tipo==='Materiales';
-      var mon=f.moneda||'ARS';
-      var bucket=esM?totMat:totObra;
-      if(!bucket[mon]) bucket[mon]={monto:0,sCC:0,sCj:0,st:0};
-      bucket[mon].monto+=f.montoOriginal;
-      bucket[mon].sCC+=f.sCtaCte;
-      bucket[mon].sCj+=f.sCanje;
-      bucket[mon].st+=f.saldoTotal;
-      var refHtml=f.referencia?('<span style="color:#555;font-size:11px">'+f.referencia+'</span>'):'<span style="color:#bbb">—</span>';
-      return '<tr>'+
+      var mon=f.moneda;
+      if(!totPorMon[mon]) totPorMon[mon]={monto:0,consCtaCte:0,sCtaCte:0,montoCanje:0,consCanje:0,sCanje:0};
+      totPorMon[mon].monto+=f.montoTotal;
+      totPorMon[mon].consCtaCte+=f.consumidoCtaCte;
+      totPorMon[mon].sCtaCte+=f.sCtaCte;
+      totPorMon[mon].montoCanje+=f.montoCanje;
+      totPorMon[mon].consCanje+=f.consumidoCanje;
+      totPorMon[mon].sCanje+=f.sCanjeVal;
+      var refHtml=f.referencia?('<span style="color:#555;font-size:11px">'+f.referencia+'</span>'):'';
+      var filaBase='<tr>'+
         _cell(f.numero+'<br><span style="color:#555;font-size:11px">'+f.descripcion+'</span>')+
         _cell(f.proveedor)+
-        _cell('<span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;background:'+(f.tipo==='Materiales'?'#e0f0ff;color:#1a6abf':'#e8f5e9;color:#2e7d32')+'">'+f.tipo+'</span>')+
-        _cell(mon+' '+_fmtNum(f.montoOriginal),'text-align:right')+
-        _cell(f.sCtaCte>0?mon+' '+_fmtNum(f.sCtaCte):'—','text-align:right;color:#2e7d32')+
-        _cell(f.sCanje>0?mon+' '+_fmtNum(f.sCanje):'—','text-align:right;color:#1a6abf')+
-        _cell('<strong>'+mon+' '+_fmtNum(f.saldoTotal)+'</strong>','text-align:right')+
-        _cell(refHtml,'max-width:220px')+
+        _cell(mon+' '+_fmtNum(f.montoTotal),'text-align:right')+
+        _cell(f.consumidoCtaCte>0?_fmtNum(f.consumidoCtaCte):'—','text-align:right;color:#555')+
+        _cell(f.sCtaCte>0?'<strong>'+_fmtNum(f.sCtaCte)+'</strong>':'—','text-align:right;color:#2e7d32')+
+        _cell(f.montoCanje>0?_fmtNum(f.montoCanje):'—','text-align:right;color:#555')+
+        _cell(f.consumidoCanje>0?_fmtNum(f.consumidoCanje):'—','text-align:right;color:#555')+
+        _cell(f.sCanjeVal>0?'<strong>'+_fmtNum(f.sCanjeVal)+'</strong>':'—','text-align:right;color:#1a6abf')+
+        _cell(refHtml,'max-width:180px')+
       '</tr>';
-    }).join('');
-    // Filas de subtotal: una fila por tipo × moneda
-    function _subfilas(bucket, label, bg){
-      return Object.keys(bucket).map(function(mon){
-        var t=bucket[mon];
-        return '<tr style="background:'+bg+';font-weight:600">'+
-          _cell(label+(Object.keys(bucket).length>1?' ('+mon+')':''),'font-size:11px')+_cell('')+_cell('')+
-          _cell(mon+' '+_fmtNum(t.monto),'text-align:right')+
-          _cell(mon+' '+_fmtNum(t.sCC),'text-align:right;color:#2e7d32')+
-          _cell(mon+' '+_fmtNum(t.sCj),'text-align:right;color:#1a6abf')+
-          _cell(mon+' '+_fmtNum(t.st),'text-align:right')+
+      // Sub-filas de acopios
+      var subAcop=f.acopios.map(function(ac){
+        var montoAj=montoAjustadoCAC(ac);
+        var saldoAc=Math.max(0,montoAj-(parseFloat(ac.descontado)||0));
+        return '<tr style="background:#f5f9ff">'+
+          _cell('<span style="color:#888;padding-left:16px">↳ '+(ac.numero||'')+'</span><br><span style="color:#aaa;font-size:11px;padding-left:16px">'+(ac.descripcion||'').substring(0,40)+'</span>')+
+          _cell('')+_cell('')+_cell('')+_cell('')+
+          _cell(_fmtNum(ac.monto),'text-align:right;color:#888;font-size:11px')+
+          _cell(_fmtNum(parseFloat(ac.descontado)||0),'text-align:right;color:#888;font-size:11px')+
+          _cell(saldoAc>0?'<strong>'+_fmtNum(saldoAc)+'</strong>':'—','text-align:right;color:#1a6abf;font-size:11px')+
           _cell('')+'</tr>';
       }).join('');
-    }
-    var subHTML='';
-    if(Object.keys(totMat).length>0) subHTML+=_subfilas(totMat,'Subtotal Materiales','#e3f2fd');
-    if(Object.keys(totObra).length>0) subHTML+=_subfilas(totObra,'Subtotal Obra','#e8f5e9');
+      return filaBase+subAcop;
+    }).join('');
+    // Filas de total por moneda
+    var subHTML=Object.keys(totPorMon).map(function(mon){
+      var t=totPorMon[mon];
+      return '<tr style="background:#1a3a5c1a;font-weight:600">'+
+        _cell('Total '+mon,'font-size:11px')+_cell('')+
+        _cell(mon+' '+_fmtNum(t.monto),'text-align:right')+
+        _cell(_fmtNum(t.consCtaCte),'text-align:right')+
+        _cell(_fmtNum(t.sCtaCte),'text-align:right;color:#2e7d32')+
+        _cell(_fmtNum(t.montoCanje),'text-align:right')+
+        _cell(_fmtNum(t.consCanje),'text-align:right')+
+        _cell(mon+' '+_fmtNum(t.sCanje),'text-align:right;color:#1a6abf')+
+        _cell('')+'</tr>';
+    }).join('');
     tablas+='<div style="margin-bottom:28px">'+
       '<div style="background:#1a3a5c;color:#fff;padding:8px 12px;font-weight:700;font-size:13px;border-radius:4px 4px 0 0">🏗 '+proy+'</div>'+
       '<table style="width:100%;border-collapse:collapse;border:1px solid #ddd">'+
-        '<thead><tr>'+_hcell('Contrato')+_hcell('Proveedor')+_hcell('Tipo')+_hcell('Monto original')+_hcell('Saldo cta cte')+_hcell('Saldo canje')+_hcell('Saldo total')+_hcell('Referencia (cant. estimada)')+'</tr></thead>'+
+        '<thead><tr>'+
+          _hcell('Contrato')+_hcell('Proveedor')+
+          _hcell('Monto total')+_hcell('Consumido')+_hcell('Saldo')+
+          _hcell('Canje pactado')+_hcell('Consumido canje')+_hcell('Saldo canje')+
+          _hcell('Referencia')+
+        '</tr></thead>'+
         '<tbody>'+filaHTML+subHTML+'</tbody>'+
       '</table></div>';
   });
