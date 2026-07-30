@@ -256,7 +256,6 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
     <div class="nav-item" onclick="nav('canjes',this)"><span class="nav-icon">🏢</span>Canjes</div>
     <div class="nav-item" onclick="nav('certificados',this)"><span class="nav-icon">✓</span>Certificados</div>
     <div class="nav-item" onclick="nav('facturas',this)"><span class="nav-icon">🧾</span>Facturas</div>
-    <div class="nav-item" onclick="nav('acopios',this)"><span class="nav-icon">📦</span>Acopios</div>
   </div>
   <div class="nav-section">
     <div class="nav-label">Control</div>
@@ -3336,72 +3335,92 @@ function renderSaldos(){
   });
   cont.innerHTML=Object.keys(porProyecto).map(pid=>{
     const lista=porProyecto[pid];
-    // Totales separados por moneda — no mezclar ARS con USD
     const totPorMoneda={};
     const filas=lista.map(c=>{
-      const monto=parseFloat(c.monto)||0;
-      const pactCtaCte=parseFloat(c.montoCtaCte||c.montoDinero)||0;
-      const pactCanje=parseFloat(c.montoCanje)||0;
-      const _factsC=(DB.facturas||[]).filter(x=>x.contratoId===c.id);
-      let sCtaCte,sCanje;
-      if(c.categoria==='Materiales'||_factsC.length>0){
-        const cons=consumidoContrato(c);
-        sCtaCte=Math.max(0,pactCtaCte-cons.ctaCte);
-        sCanje=Math.max(0,pactCanje-cons.canje);
-      }else{
-        sCtaCte=saldoCtaCte(c);
-        sCanje=saldoCanje(c);
-      }
-      const pendiente=sCtaCte+sCanje;
-      const esMat=c.categoria==='Materiales'||_factsC.length>0;
-      // Acumular por moneda
       const mon=c.moneda||'ARS';
-      if(!totPorMoneda[mon]) totPorMoneda[mon]={monto:0,ctaCte:0,canje:0};
-      totPorMoneda[mon].monto+=monto;
-      totPorMoneda[mon].ctaCte+=sCtaCte;
-      totPorMoneda[mon].canje+=sCanje;
-      // Precios de referencia para contratos Materiales
+      const montoTotal=parseFloat(c.monto)||0;
+      const montoCanje=parseFloat(c.montoCanje)||0;
+      const pactCtaCte=parseFloat(c.montoCtaCte||c.montoDinero)||0;
+      // Consumido dinero: siempre desde consumidoContrato (facturas o certificados)
+      const cons=consumidoContrato(c);
+      const consumidoCtaCte=cons.ctaCte;
+      const sCtaCte=Math.max(0,pactCtaCte-consumidoCtaCte);
+      // Precios de referencia (contratos Materiales)
+      const esMat=c.categoria==='Materiales'||(DB.facturas||[]).some(x=>x.contratoId===c.id);
       const precios=c.preciosRef||[];
-      const _saldoChip=sCtaCte+sCanje;
-      const chipTxt=precios.length
-        ?precios.filter(p=>p.precio>0).map(p=>{
-            const cant=_saldoChip/p.precio;
-            return `${p.nombre}: ~${fmtCant(cant)} ${p.unidad||'u'}`;
-          }).join(' · ')||precios.map(p=>p.nombre).join(' · ')
-        :'Precios ref.';
-      const preciosBadge=esMat?`<br><button onclick="abrirPreciosRef('${c.id}')" style="margin-top:4px;background:none;border:1px solid var(--border);border-radius:12px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--text2)">📋 ${chipTxt}</button>`:'';
-      return `<tr>
+      const preciosBadge=esMat&&precios.length?`<br><button onclick="abrirPreciosRef('${c.id}')" style="margin-top:4px;background:none;border:1px solid var(--border);border-radius:12px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--text2)">📋 ${precios.map(p=>p.nombre).join(' · ')}</button>`:'';
+      // Canje: si hay acopios, derivar de ellos (fuente de verdad)
+      const acopiosC=DB.acopios.filter(a=>a.contratoId===c.id);
+      let consumidoCanje, sCanjeVal;
+      if(acopiosC.length>0){
+        consumidoCanje=acopiosC.reduce((s,ac)=>s+(parseFloat(ac.descontado)||0),0);
+        sCanjeVal=acopiosC.reduce((s,ac)=>s+Math.max(0,montoAjustadoCAC(ac)-(parseFloat(ac.descontado)||0)),0);
+      } else if(montoCanje>0){
+        consumidoCanje=Math.max(0,montoCanje-saldoCanje(c));
+        sCanjeVal=saldoCanje(c);
+      } else {
+        consumidoCanje=0; sCanjeVal=0;
+      }
+      // Acumular totales por moneda
+      if(!totPorMoneda[mon]) totPorMoneda[mon]={monto:0,consumidoCtaCte:0,sCtaCte:0,montoCanje:0,consumidoCanje:0,sCanje:0};
+      totPorMoneda[mon].monto+=montoTotal;
+      totPorMoneda[mon].consumidoCtaCte+=consumidoCtaCte;
+      totPorMoneda[mon].sCtaCte+=sCtaCte;
+      totPorMoneda[mon].montoCanje+=montoCanje;
+      totPorMoneda[mon].consumidoCanje+=consumidoCanje;
+      totPorMoneda[mon].sCanje+=sCanjeVal;
+      // Fila principal del contrato
+      const filaContrato=`<tr style="cursor:pointer" onclick="openContrato('${c.id}')">
         <td><span class="mono">${c.numero}</span>${preciosBadge}</td>
         <td>${provNombre(c.proveedorId)}</td>
-        <td>${badgeEstado(c.estado)}</td>
-        <td style="text-align:right">${mon} ${fmt(monto)}</td>
-        <td style="text-align:right">${fmt(pactCtaCte)}<br><span style="font-size:11px;color:var(--text3)">saldo: ${fmt(sCtaCte)}</span></td>
-        <td style="text-align:right">${fmt(pactCanje)}<br><span style="font-size:11px;color:var(--text3)">saldo: ${fmt(sCanje)}</span></td>
-        <td style="text-align:right;font-weight:600">${fmt(pendiente)}</td>
+        <td style="text-align:right">${mon} ${fmt(montoTotal)}</td>
+        <td style="text-align:right;color:var(--text2)">${fmt(consumidoCtaCte)}</td>
+        <td style="text-align:right;font-weight:500">${fmt(sCtaCte)}</td>
+        <td style="text-align:right;color:var(--text2)">${montoCanje>0?fmt(montoCanje):'—'}</td>
+        <td style="text-align:right;color:var(--text2)">${montoCanje>0?fmt(consumidoCanje):'—'}</td>
+        <td style="text-align:right;font-weight:600;color:${sCanjeVal>0?'var(--blue)':'var(--text3)'}">${montoCanje>0?fmt(sCanjeVal):'—'}</td>
       </tr>`;
+      // Sub-filas de acopios (desglose)
+      const filasAcop=acopiosC.map(ac=>{
+        const montoAj=montoAjustadoCAC(ac);
+        const saldoAc=Math.max(0,montoAj-(parseFloat(ac.descontado)||0));
+        const clrAc=saldoAc<=0?'var(--green)':saldoAc<montoAj*0.2?'var(--amber)':'var(--blue)';
+        return `<tr style="background:var(--bg2);font-size:12px">
+          <td style="padding-left:28px;color:var(--text3)">↳ ${ac.numero}</td>
+          <td style="color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(ac.descripcion||'').substring(0,35)}</td>
+          <td></td><td></td><td></td>
+          <td style="text-align:right;color:var(--text2)">${ac.moneda||mon} ${fmt(ac.monto)}</td>
+          <td style="text-align:right;color:var(--text2)">${fmt(parseFloat(ac.descontado)||0)}</td>
+          <td style="text-align:right;font-weight:600;color:${clrAc}">${fmt(saldoAc)}</td>
+        </tr>`;
+      }).join('');
+      return filaContrato+filasAcop;
     }).join('');
-    // Una fila de total por cada moneda presente
+    // Fila de totales por moneda
     const filasTotal=Object.entries(totPorMoneda).map(([mon,t])=>`
       <tr style="font-weight:600;background:var(--bg2)">
-        <td colspan="3" style="color:var(--text2)">Total ${mon}</td>
+        <td colspan="2" style="color:var(--text2)">Total ${mon}</td>
         <td style="text-align:right">${mon} ${fmt(t.monto)}</td>
-        <td style="text-align:right">${fmt(t.ctaCte)}</td>
-        <td style="text-align:right">${fmt(t.canje)}</td>
-        <td style="text-align:right">${fmt(t.ctaCte+t.canje)}</td>
+        <td style="text-align:right">${fmt(t.consumidoCtaCte)}</td>
+        <td style="text-align:right">${fmt(t.sCtaCte)}</td>
+        <td style="text-align:right">${fmt(t.montoCanje)}</td>
+        <td style="text-align:right">${fmt(t.consumidoCanje)}</td>
+        <td style="text-align:right">${fmt(t.sCanje)}</td>
       </tr>`).join('');
     return `<div class="card" style="margin-bottom:18px">
       <div class="card-header"><div class="card-title">${proyNombre(pid)}</div></div>
       <div class="card-body" style="padding:0">
         <table class="table">
           <thead><tr>
-            <th>Contrato</th><th>Proveedor</th><th>Estado</th>
+            <th>Contrato</th><th>Proveedor</th>
             <th style="text-align:right">Monto total</th>
-            <th style="text-align:right">Cta. Cte. (pactado/saldo)</th>
-            <th style="text-align:right">Canje (pactado/saldo)</th>
-            <th style="text-align:right">Total pendiente</th>
+            <th style="text-align:right">Consumido</th>
+            <th style="text-align:right">Saldo</th>
+            <th style="text-align:right">Canje pactado</th>
+            <th style="text-align:right">Consumido canje</th>
+            <th style="text-align:right">Saldo canje</th>
           </tr></thead>
-          <tbody>${filas}${filasTotal}
-          </tbody>
+          <tbody>${filas}${filasTotal}</tbody>
         </table>
       </div>
     </div>`;
