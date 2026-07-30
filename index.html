@@ -4889,7 +4889,7 @@ function generarInforme(){
       totPorMon[mon].sCanje+=f.sCanjeVal;
       var refHtml=f.referencia?('<span style="color:#555;font-size:11px">'+f.referencia+'</span>'):'';
       var filaBase='<tr>'+
-        _cell(f.numero+'<br><span style="color:#555;font-size:11px">'+f.descripcion+'</span>')+
+        _cell(f.descripcion)+
         _cell(f.proveedor)+
         _cell(_fmtMon(f.pactCtaCte,mon),'text-align:right')+
         _cell(f.consumidoCtaCte>0?_fmtMon(f.consumidoCtaCte,mon):'—','text-align:right;color:#555')+
