@@ -3349,12 +3349,51 @@ function renderSaldos(){
       const esMat=c.categoria==='Materiales'||(DB.facturas||[]).some(x=>x.contratoId===c.id);
       const precios=c.preciosRef||[];
       const preciosBadge=esMat&&precios.length?`<br><button onclick="abrirPreciosRef('${c.id}')" style="margin-top:4px;background:none;border:1px solid var(--border);border-radius:12px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--text2)">📋 ${precios.map(p=>p.nombre).join(' · ')}</button>`:'';
-      // Canje: si hay acopios, derivar de ellos (fuente de verdad)
+      // Canje: prioridad → acopios > partes A/B > campo almacenado
       const acopiosC=DB.acopios.filter(a=>a.contratoId===c.id);
-      let consumidoCanje, sCanjeVal;
+      const tienePartes=tienePartesCanje(c);
+      let consumidoCanje, sCanjeVal, montoCanjePactado=montoCanje;
+      let filasDetalle='';
       if(acopiosC.length>0){
+        // Fuente: acopios individuales
         consumidoCanje=acopiosC.reduce((s,ac)=>s+(parseFloat(ac.descontado)||0),0);
         sCanjeVal=acopiosC.reduce((s,ac)=>s+Math.max(0,montoAjustadoCAC(ac)-(parseFloat(ac.descontado)||0)),0);
+        filasDetalle=acopiosC.map(ac=>{
+          const montoAj=montoAjustadoCAC(ac);
+          const saldoAc=Math.max(0,montoAj-(parseFloat(ac.descontado)||0));
+          const clrAc=saldoAc<=0?'var(--green)':saldoAc<montoAj*0.2?'var(--amber)':'var(--blue)';
+          return `<tr style="background:var(--bg2);font-size:12px">
+            <td style="padding-left:28px;color:var(--text3)">↳ ${ac.numero}</td>
+            <td style="color:var(--text2)">${(ac.descripcion||'').substring(0,35)}</td>
+            <td></td><td></td><td></td>
+            <td style="text-align:right;color:var(--text2)">${ac.moneda||mon} ${fmt(ac.monto)}</td>
+            <td style="text-align:right;color:var(--text2)">${fmt(parseFloat(ac.descontado)||0)}</td>
+            <td style="text-align:right;font-weight:600;color:${clrAc}">${fmt(saldoAc)}</td>
+          </tr>`;
+        }).join('');
+      } else if(tienePartes){
+        // Fuente: Parte A + Parte B
+        const pctA=parseFloat(c.canjeParteA)||0, pctB=parseFloat(c.canjeParteB)||0;
+        const montoA=parseFloat(c.montoParteA)||0, montoB=parseFloat(c.montoParteB)||0;
+        const canjeA=montoA*(pctA/100), canjeB=montoB*(pctB/100);
+        const impA=imputadoCanjeParte(c,'A'), impB=imputadoCanjeParte(c,'B');
+        const saldoA=saldoCanjeParte(c,'A'), saldoB=saldoCanjeParte(c,'B');
+        montoCanjePactado=canjeA+canjeB;
+        consumidoCanje=impA+impB;
+        sCanjeVal=saldoA+saldoB;
+        const _subParte=(label,montoP,canjeP,impP,saldoP)=>{
+          if(canjeP<=0) return '';
+          const clr=saldoP<=0?'var(--green)':saldoP<canjeP*0.2?'var(--amber)':'var(--blue)';
+          return `<tr style="background:var(--bg2);font-size:12px">
+            <td style="padding-left:28px;color:var(--text3)">↳ ${label}</td>
+            <td style="color:var(--text2)">${mon} ${fmt(montoP)} total</td>
+            <td></td><td></td><td></td>
+            <td style="text-align:right;color:var(--text2)">${fmt(canjeP)}</td>
+            <td style="text-align:right;color:var(--text2)">${fmt(impP)}</td>
+            <td style="text-align:right;font-weight:600;color:${clr}">${fmt(saldoP)}</td>
+          </tr>`;
+        };
+        filasDetalle=_subParte('Parte A',montoA,canjeA,impA,saldoA)+_subParte('Parte B',montoB,canjeB,impB,saldoB);
       } else if(montoCanje>0){
         consumidoCanje=Math.max(0,montoCanje-saldoCanje(c));
         sCanjeVal=saldoCanje(c);
@@ -3366,7 +3405,7 @@ function renderSaldos(){
       totPorMoneda[mon].monto+=montoTotal;
       totPorMoneda[mon].consumidoCtaCte+=consumidoCtaCte;
       totPorMoneda[mon].sCtaCte+=sCtaCte;
-      totPorMoneda[mon].montoCanje+=montoCanje;
+      totPorMoneda[mon].montoCanje+=montoCanjePactado;
       totPorMoneda[mon].consumidoCanje+=consumidoCanje;
       totPorMoneda[mon].sCanje+=sCanjeVal;
       // Fila principal del contrato
@@ -3376,25 +3415,11 @@ function renderSaldos(){
         <td style="text-align:right">${mon} ${fmt(montoTotal)}</td>
         <td style="text-align:right;color:var(--text2)">${fmt(consumidoCtaCte)}</td>
         <td style="text-align:right;font-weight:500">${fmt(sCtaCte)}</td>
-        <td style="text-align:right;color:var(--text2)">${montoCanje>0?fmt(montoCanje):'—'}</td>
-        <td style="text-align:right;color:var(--text2)">${montoCanje>0?fmt(consumidoCanje):'—'}</td>
-        <td style="text-align:right;font-weight:600;color:${sCanjeVal>0?'var(--blue)':'var(--text3)'}">${montoCanje>0?fmt(sCanjeVal):'—'}</td>
+        <td style="text-align:right;color:var(--text2)">${montoCanjePactado>0?fmt(montoCanjePactado):'—'}</td>
+        <td style="text-align:right;color:var(--text2)">${montoCanjePactado>0?fmt(consumidoCanje):'—'}</td>
+        <td style="text-align:right;font-weight:600;color:${sCanjeVal>0?'var(--blue)':'var(--text3)'}">${montoCanjePactado>0?fmt(sCanjeVal):'—'}</td>
       </tr>`;
-      // Sub-filas de acopios (desglose)
-      const filasAcop=acopiosC.map(ac=>{
-        const montoAj=montoAjustadoCAC(ac);
-        const saldoAc=Math.max(0,montoAj-(parseFloat(ac.descontado)||0));
-        const clrAc=saldoAc<=0?'var(--green)':saldoAc<montoAj*0.2?'var(--amber)':'var(--blue)';
-        return `<tr style="background:var(--bg2);font-size:12px">
-          <td style="padding-left:28px;color:var(--text3)">↳ ${ac.numero}</td>
-          <td style="color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(ac.descripcion||'').substring(0,35)}</td>
-          <td></td><td></td><td></td>
-          <td style="text-align:right;color:var(--text2)">${ac.moneda||mon} ${fmt(ac.monto)}</td>
-          <td style="text-align:right;color:var(--text2)">${fmt(parseFloat(ac.descontado)||0)}</td>
-          <td style="text-align:right;font-weight:600;color:${clrAc}">${fmt(saldoAc)}</td>
-        </tr>`;
-      }).join('');
-      return filaContrato+filasAcop;
+      return filaContrato+filasDetalle;
     }).join('');
     // Fila de totales por moneda
     const filasTotal=Object.entries(totPorMoneda).map(([mon,t])=>`
@@ -4762,12 +4787,30 @@ function generarInforme(){
     var cons=consumidoContrato(c);
     var consumidoCtaCte=cons.ctaCte;
     var sCtaCte=Math.max(0,pactCtaCte-consumidoCtaCte);
-    // Canje: si hay acopios, derivar de ellos
+    // Canje: prioridad → acopios > partes A/B > campo almacenado
     var acopiosC=DB.acopios.filter(function(a){ return a.contratoId===c.id; });
-    var consumidoCanje, sCanjeVal;
+    var tPartes=tienePartesCanje(c);
+    var consumidoCanje, sCanjeVal, montoCanjePactado=montoCanje;
+    var subDetalles=[];
     if(acopiosC.length>0){
       consumidoCanje=acopiosC.reduce(function(s,ac){ return s+(parseFloat(ac.descontado)||0); },0);
       sCanjeVal=acopiosC.reduce(function(s,ac){ return s+Math.max(0,montoAjustadoCAC(ac)-(parseFloat(ac.descontado)||0)); },0);
+      subDetalles=acopiosC.map(function(ac){
+        var montoAj=montoAjustadoCAC(ac);
+        var saldoAc=Math.max(0,montoAj-(parseFloat(ac.descontado)||0));
+        return {label:(ac.numero||'')+(ac.descripcion?' — '+(ac.descripcion||'').substring(0,30):''),monto:ac.monto,consumido:parseFloat(ac.descontado)||0,saldo:saldoAc};
+      });
+    } else if(tPartes){
+      var pctA=parseFloat(c.canjeParteA)||0, pctB=parseFloat(c.canjeParteB)||0;
+      var montoA=parseFloat(c.montoParteA)||0, montoB=parseFloat(c.montoParteB)||0;
+      var canjeA=montoA*(pctA/100), canjeB=montoB*(pctB/100);
+      var impA=imputadoCanjeParte(c,'A'), impB=imputadoCanjeParte(c,'B');
+      var saldoA=saldoCanjeParte(c,'A'), saldoB=saldoCanjeParte(c,'B');
+      montoCanjePactado=canjeA+canjeB;
+      consumidoCanje=impA+impB;
+      sCanjeVal=saldoA+saldoB;
+      if(canjeA>0) subDetalles.push({label:'Parte A ('+mon+' '+_fmtNum(montoA)+' total)',monto:canjeA,consumido:impA,saldo:saldoA});
+      if(canjeB>0) subDetalles.push({label:'Parte B ('+mon+' '+_fmtNum(montoB)+' total)',monto:canjeB,consumido:impB,saldo:saldoB});
     } else if(montoCanje>0){
       consumidoCanje=Math.max(0,montoCanje-saldoCanje(c));
       sCanjeVal=saldoCanje(c);
@@ -4786,18 +4829,17 @@ function generarInforme(){
       proveedor:provNombre(c.proveedorId),
       numero:c.numero||'',
       descripcion:(c.descripcion||'').substring(0,60),
-      tipo:esMat?'Materiales':(c.categoria||'Obra'),
       moneda:mon,
       montoTotal:montoTotal,
       pactCtaCte:pactCtaCte,
       consumidoCtaCte:consumidoCtaCte,
       sCtaCte:sCtaCte,
-      montoCanje:montoCanje,
+      montoCanjePactado:montoCanjePactado,
       consumidoCanje:consumidoCanje,
       sCanjeVal:sCanjeVal,
       saldoTotal:saldoTotal,
       referencia:refLineas.join(' | '),
-      acopios:acopiosC
+      subDetalles:subDetalles
     });
   });
   // Ordenar: proyecto → número de contrato
@@ -4823,7 +4865,7 @@ function generarInforme(){
       totPorMon[mon].monto+=f.montoTotal;
       totPorMon[mon].consCtaCte+=f.consumidoCtaCte;
       totPorMon[mon].sCtaCte+=f.sCtaCte;
-      totPorMon[mon].montoCanje+=f.montoCanje;
+      totPorMon[mon].montoCanje+=f.montoCanjePactado;
       totPorMon[mon].consCanje+=f.consumidoCanje;
       totPorMon[mon].sCanje+=f.sCanjeVal;
       var refHtml=f.referencia?('<span style="color:#555;font-size:11px">'+f.referencia+'</span>'):'';
@@ -4833,21 +4875,19 @@ function generarInforme(){
         _cell(mon+' '+_fmtNum(f.montoTotal),'text-align:right')+
         _cell(f.consumidoCtaCte>0?_fmtNum(f.consumidoCtaCte):'—','text-align:right;color:#555')+
         _cell(f.sCtaCte>0?'<strong>'+_fmtNum(f.sCtaCte)+'</strong>':'—','text-align:right;color:#2e7d32')+
-        _cell(f.montoCanje>0?_fmtNum(f.montoCanje):'—','text-align:right;color:#555')+
+        _cell(f.montoCanjePactado>0?_fmtNum(f.montoCanjePactado):'—','text-align:right;color:#555')+
         _cell(f.consumidoCanje>0?_fmtNum(f.consumidoCanje):'—','text-align:right;color:#555')+
         _cell(f.sCanjeVal>0?'<strong>'+_fmtNum(f.sCanjeVal)+'</strong>':'—','text-align:right;color:#1a6abf')+
         _cell(refHtml,'max-width:180px')+
       '</tr>';
-      // Sub-filas de acopios
-      var subAcop=f.acopios.map(function(ac){
-        var montoAj=montoAjustadoCAC(ac);
-        var saldoAc=Math.max(0,montoAj-(parseFloat(ac.descontado)||0));
+      // Sub-filas de desglose (acopios o partes A/B)
+      var subAcop=(f.subDetalles||[]).map(function(d){
         return '<tr style="background:#f5f9ff">'+
-          _cell('<span style="color:#888;padding-left:16px">↳ '+(ac.numero||'')+'</span><br><span style="color:#aaa;font-size:11px;padding-left:16px">'+(ac.descripcion||'').substring(0,40)+'</span>')+
+          _cell('<span style="color:#888;padding-left:16px">↳ '+d.label+'</span>')+
           _cell('')+_cell('')+_cell('')+_cell('')+
-          _cell(_fmtNum(ac.monto),'text-align:right;color:#888;font-size:11px')+
-          _cell(_fmtNum(parseFloat(ac.descontado)||0),'text-align:right;color:#888;font-size:11px')+
-          _cell(saldoAc>0?'<strong>'+_fmtNum(saldoAc)+'</strong>':'—','text-align:right;color:#1a6abf;font-size:11px')+
+          _cell(_fmtNum(d.monto),'text-align:right;color:#888;font-size:11px')+
+          _cell(_fmtNum(d.consumido),'text-align:right;color:#888;font-size:11px')+
+          _cell(d.saldo>0?'<strong>'+_fmtNum(d.saldo)+'</strong>':'—','text-align:right;color:#1a6abf;font-size:11px')+
           _cell('')+'</tr>';
       }).join('');
       return filaBase+subAcop;
