@@ -4774,6 +4774,7 @@ async function guardarPreciosRef(){
 // ─── INFORME GENERAL DE CONTRATOS ────────────────────────
 function generarInforme(){
   function _fmtNum(n){ return new Intl.NumberFormat('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n||0); }
+  function _fmtMon(n,mon){ return (mon==='USD'?'USD ':'$ ')+_fmtNum(n); }
   function _cell(txt,style){ return '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;vertical-align:top;'+(style||'')+'">'+txt+'</td>'; }
   function _hcell(txt){ return '<th style="padding:6px 8px;border:1px solid #ccc;background:#1a3a5c;color:#fff;font-size:11px;text-align:left;white-space:nowrap">'+txt+'</th>'; }
 
@@ -4872,12 +4873,12 @@ function generarInforme(){
       var filaBase='<tr>'+
         _cell(f.numero+'<br><span style="color:#555;font-size:11px">'+f.descripcion+'</span>')+
         _cell(f.proveedor)+
-        _cell(mon+' '+_fmtNum(f.montoTotal),'text-align:right')+
-        _cell(f.consumidoCtaCte>0?_fmtNum(f.consumidoCtaCte):'—','text-align:right;color:#555')+
-        _cell(f.sCtaCte>0?'<strong>'+_fmtNum(f.sCtaCte)+'</strong>':'—','text-align:right;color:#2e7d32')+
-        _cell(f.montoCanjePactado>0?_fmtNum(f.montoCanjePactado):'—','text-align:right;color:#555')+
-        _cell(f.consumidoCanje>0?_fmtNum(f.consumidoCanje):'—','text-align:right;color:#555')+
-        _cell(f.sCanjeVal>0?'<strong>'+_fmtNum(f.sCanjeVal)+'</strong>':'—','text-align:right;color:#1a6abf')+
+        _cell(_fmtMon(f.montoTotal,mon),'text-align:right')+
+        _cell(f.consumidoCtaCte>0?_fmtMon(f.consumidoCtaCte,mon):'—','text-align:right;color:#555')+
+        _cell(f.sCtaCte>0?'<strong>'+_fmtMon(f.sCtaCte,mon)+'</strong>':'—','text-align:right;color:#2e7d32')+
+        _cell(f.montoCanjePactado>0?_fmtMon(f.montoCanjePactado,mon):'—','text-align:right;color:#555')+
+        _cell(f.consumidoCanje>0?_fmtMon(f.consumidoCanje,mon):'—','text-align:right;color:#555')+
+        _cell(f.sCanjeVal>0?'<strong>'+_fmtMon(f.sCanjeVal,mon)+'</strong>':'—','text-align:right;color:#1a6abf')+
         _cell(refHtml,'max-width:180px')+
       '</tr>';
       // Sub-filas de desglose (acopios o partes A/B)
@@ -4885,9 +4886,9 @@ function generarInforme(){
         return '<tr style="background:#f5f9ff">'+
           _cell('<span style="color:#888;padding-left:16px">↳ '+d.label+'</span>')+
           _cell('')+_cell('')+_cell('')+_cell('')+
-          _cell(_fmtNum(d.monto),'text-align:right;color:#888;font-size:11px')+
-          _cell(_fmtNum(d.consumido),'text-align:right;color:#888;font-size:11px')+
-          _cell(d.saldo>0?'<strong>'+_fmtNum(d.saldo)+'</strong>':'—','text-align:right;color:#1a6abf;font-size:11px')+
+          _cell(_fmtMon(d.monto,mon),'text-align:right;color:#888;font-size:11px')+
+          _cell(_fmtMon(d.consumido,mon),'text-align:right;color:#888;font-size:11px')+
+          _cell(d.saldo>0?'<strong>'+_fmtMon(d.saldo,mon)+'</strong>':'—','text-align:right;color:#1a6abf;font-size:11px')+
           _cell('')+'</tr>';
       }).join('');
       return filaBase+subAcop;
@@ -4897,12 +4898,12 @@ function generarInforme(){
       var t=totPorMon[mon];
       return '<tr style="background:#1a3a5c1a;font-weight:600">'+
         _cell('Total '+mon,'font-size:11px')+_cell('')+
-        _cell(mon+' '+_fmtNum(t.monto),'text-align:right')+
-        _cell(_fmtNum(t.consCtaCte),'text-align:right')+
-        _cell(_fmtNum(t.sCtaCte),'text-align:right;color:#2e7d32')+
-        _cell(_fmtNum(t.montoCanje),'text-align:right')+
-        _cell(_fmtNum(t.consCanje),'text-align:right')+
-        _cell(mon+' '+_fmtNum(t.sCanje),'text-align:right;color:#1a6abf')+
+        _cell(_fmtMon(t.monto,mon),'text-align:right')+
+        _cell(_fmtMon(t.consCtaCte,mon),'text-align:right')+
+        _cell(_fmtMon(t.sCtaCte,mon),'text-align:right;color:#2e7d32')+
+        _cell(_fmtMon(t.montoCanje,mon),'text-align:right')+
+        _cell(_fmtMon(t.consCanje,mon),'text-align:right')+
+        _cell(_fmtMon(t.sCanje,mon),'text-align:right;color:#1a6abf')+
         _cell('')+'</tr>';
     }).join('');
     tablas+='<div style="margin-bottom:28px">'+
