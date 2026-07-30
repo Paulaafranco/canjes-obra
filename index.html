@@ -3420,7 +3420,7 @@ function renderSaldos(){
       }
       // Acumular totales por moneda
       if(!totPorMoneda[mon]) totPorMoneda[mon]={monto:0,consumidoCtaCte:0,sCtaCte:0,montoCanje:0,consumidoCanje:0,sCanje:0};
-      totPorMoneda[mon].monto+=montoTotal;
+      totPorMoneda[mon].monto+=pactCtaCte;
       totPorMoneda[mon].consumidoCtaCte+=consumidoCtaCte;
       totPorMoneda[mon].sCtaCte+=sCtaCte;
       totPorMoneda[mon].montoCanje+=montoCanjePactado;
@@ -3430,7 +3430,7 @@ function renderSaldos(){
       const filaContrato=`<tr style="cursor:pointer" onclick="openContrato('${c.id}')">
         <td><span class="mono">${c.numero}</span>${preciosBadge}</td>
         <td>${provNombre(c.proveedorId)}</td>
-        <td style="text-align:right">${mon} ${fmt(montoTotal)}</td>
+        <td style="text-align:right">${mon} ${fmt(pactCtaCte)}</td>
         <td style="text-align:right;color:var(--text2)">${fmt(consumidoCtaCte)}</td>
         <td style="text-align:right;font-weight:500">${fmt(sCtaCte)}</td>
         <td style="text-align:right;color:var(--text2)">${montoCanjePactado>0?fmt(montoCanjePactado):'—'}</td>
@@ -3456,7 +3456,7 @@ function renderSaldos(){
         <table class="table">
           <thead><tr>
             <th>Contrato</th><th>Proveedor</th>
-            <th style="text-align:right">Monto total</th>
+            <th style="text-align:right">Monto cta cte</th>
             <th style="text-align:right">Consumido</th>
             <th style="text-align:right">Saldo</th>
             <th style="text-align:right">Canje pactado</th>
@@ -4881,7 +4881,7 @@ function generarInforme(){
     var filaHTML=rows.map(function(f){
       var mon=f.moneda;
       if(!totPorMon[mon]) totPorMon[mon]={monto:0,consCtaCte:0,sCtaCte:0,montoCanje:0,consCanje:0,sCanje:0};
-      totPorMon[mon].monto+=f.montoTotal;
+      totPorMon[mon].monto+=f.pactCtaCte;
       totPorMon[mon].consCtaCte+=f.consumidoCtaCte;
       totPorMon[mon].sCtaCte+=f.sCtaCte;
       totPorMon[mon].montoCanje+=f.montoCanjePactado;
@@ -4891,7 +4891,7 @@ function generarInforme(){
       var filaBase='<tr>'+
         _cell(f.numero+'<br><span style="color:#555;font-size:11px">'+f.descripcion+'</span>')+
         _cell(f.proveedor)+
-        _cell(_fmtMon(f.montoTotal,mon),'text-align:right')+
+        _cell(_fmtMon(f.pactCtaCte,mon),'text-align:right')+
         _cell(f.consumidoCtaCte>0?_fmtMon(f.consumidoCtaCte,mon):'—','text-align:right;color:#555')+
         _cell(f.sCtaCte>0?'<strong>'+_fmtMon(f.sCtaCte,mon)+'</strong>':'—','text-align:right;color:#2e7d32')+
         _cell(f.montoCanjePactado>0?_fmtMon(f.montoCanjePactado,mon):'—','text-align:right;color:#555')+
@@ -4933,7 +4933,7 @@ function generarInforme(){
       '<table style="width:100%;border-collapse:collapse;border:1px solid #ddd">'+
         '<thead><tr>'+
           _hcell('Contrato')+_hcell('Proveedor')+
-          _hcell('Monto total')+_hcell('Consumido')+_hcell('Saldo')+
+          _hcell('Monto cta cte')+_hcell('Consumido')+_hcell('Saldo')+
           _hcell('Canje pactado')+_hcell('Consumido canje')+_hcell('Saldo canje')+
           _hcell('Referencia')+
         '</tr></thead>'+
