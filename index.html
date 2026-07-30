@@ -224,6 +224,11 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 
 /* COLOR CHIPS para tipo proyecto */
 .tipo-chip{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+
+/* Tipografías */
+body,button,input,select,textarea{font-family:'Work Sans',sans-serif}
+table,td,th{font-family:'Ubuntu',sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
 </style>
 </head>
 <body>
@@ -1570,11 +1575,7 @@ function openModal(id){
     const totalEl=document.getElementById('ac-total-val');
     if(totalEl) totalEl.textContent='—';
   }
-  if(id==='modal-proyecto'){ document.getElementById('proy-edit-id').value=''; document.getElementById('proy-modal-title').textContent='Nuevo proyecto'; ['proy-nombre','proy-dir','proy-obs'].forEach(f=>{const el=document.getElementById(f);if(el)el.value='';}
-/* Tipografías por zona */
-.table-wrap table,td,th,.form-group input,.form-group select,.form-group textarea,.modal-body input,.modal-body select,.modal-body textarea,.screen-body .data-table td,.screen-body .data-table th{font-family:'Ubuntu',sans-serif}
-.sidebar-brand,.nav-item,.section-header,.proy-card,.btn,.tag,.badge,h1,h2,h3,h4,.card-title,.screen-title,.stat-val,.proy-nombre{font-family:'Work Sans',sans-serif}
-); document.getElementById('proy-presupuesto').value=''; }
+  if(id==='modal-proyecto'){ document.getElementById('proy-edit-id').value=''; document.getElementById('proy-modal-title').textContent='Nuevo proyecto'; ['proy-nombre','proy-dir','proy-obs'].forEach(f=>{const el=document.getElementById(f);if(el)el.value='';}); document.getElementById('proy-presupuesto').value=''; }
   const o=document.getElementById(id);
   if(o){ o.classList.add('open'); document.body.style.overflow='hidden'; }
 }
