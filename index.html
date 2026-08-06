@@ -1045,7 +1045,7 @@ table,td,th{font-family:'Ubuntu',sans-serif}
     <button class="modal-close" onclick="closeModal()">×</button>
   </div>
   <div class="modal-body">
-    <div class="fg"><label>Contrato asociado <span class="req">*</span></label><select id="ac-contrato"><option value="">Seleccionar...</option></select></div>
+    <div class="fg"><label>Contrato asociado <span class="req">*</span></label><select id="ac-contrato" onchange="onContratoAcopioChange()"><option value="">Seleccionar...</option></select></div>
     <div class="fr c2">
       <div class="fg"><label>Moneda</label>
         <select id="ac-moneda" onchange="toggleCAC(this.value)">
@@ -1057,10 +1057,22 @@ table,td,th{font-family:'Ubuntu',sans-serif}
     </div>
 
     <div id="ac-cac-section" style="display:none;margin-bottom:12px">
-      <div class="alert info"><span class="alert-icon">📊</span><span class="alert-text">Acopio en pesos — podés registrar índice CAC para seguimiento.</span></div>
-      <div class="fr c2">
-        <div class="fg"><label>Índice CAC de origen</label><input id="ac-cac-origen" type="number" placeholder="Ej: 1250.45"></div>
-        <div class="fg"><label>Índice CAC actual</label><input id="ac-cac-actual" type="number" placeholder="Ej: 1380.20"></div>
+      <div class="alert info"><span class="alert-icon">📊</span><span class="alert-text" id="ac-cac-alert-text">Acopio en pesos — podés registrar el índice de actualización para seguimiento.</span></div>
+      <div class="fr c2" style="margin-bottom:8px">
+        <div class="fg">
+          <label>Tipo de índice</label>
+          <select id="ac-tipo-indice" onchange="onTipoIndiceAcopio(this.value)">
+            <option value="">Sin actualización</option>
+            <option value="CAC">CAC (Cámara Argentina de la Construcción)</option>
+            <option value="IPC">IPC (Índice de Precios al Consumidor)</option>
+          </select>
+        </div>
+      </div>
+      <div id="ac-indice-vals" style="display:none">
+        <div class="fr c2">
+          <div class="fg"><label id="ac-indice-label-orig">Índice origen</label><input id="ac-cac-origen" type="number" placeholder="Ej: 1250.45"></div>
+          <div class="fg"><label id="ac-indice-label-act">Índice actual</label><input id="ac-cac-actual" type="number" placeholder="Ej: 1380.20"></div>
+        </div>
       </div>
     </div>
 
@@ -2987,6 +2999,30 @@ function _renderTotalEdit(){
 function toggleCAC(moneda){
   document.getElementById('ac-cac-section').style.display=moneda==='ARS'?'block':'none';
 }
+function onContratoAcopioChange(){
+  const cId=document.getElementById('ac-contrato').value;
+  const c=DB.contratos.find(x=>x.id===cId);
+  // Auto-setear moneda y tipo de índice del contrato si tiene
+  if(c&&c.moneda){
+    document.getElementById('ac-moneda').value=c.moneda;
+    toggleCAC(c.moneda);
+  }
+  const tipoEl=document.getElementById('ac-tipo-indice');
+  if(tipoEl&&c&&c.tipoIndice){ tipoEl.value=c.tipoIndice; onTipoIndiceAcopio(c.tipoIndice); }
+  else if(tipoEl){ tipoEl.value=''; onTipoIndiceAcopio(''); }
+}
+function onTipoIndiceAcopio(val){
+  const valsDiv=document.getElementById('ac-indice-vals');
+  if(!valsDiv) return;
+  if(!val){ valsDiv.style.display='none'; return; }
+  valsDiv.style.display='block';
+  const lo=document.getElementById('ac-indice-label-orig');
+  const la=document.getElementById('ac-indice-label-act');
+  if(lo) lo.textContent='Índice '+val+' origen';
+  if(la) la.textContent='Índice '+val+' actual';
+  const alertTxt=document.getElementById('ac-cac-alert-text');
+  if(alertTxt) alertTxt.textContent='Acopio en pesos — se actualiza por índice '+val+'.';
+}
 
 function montoAjustadoCAC(ac){
   if(ac.moneda!=='ARS'||!ac.cacOrigen||!ac.cacActual) return ac.monto;
@@ -3593,7 +3629,9 @@ function renderAcopios(){
     const saldo=montoAjustado-(ac.descontado||0);
     const est=saldo<=0?'Cancelado':ac.descontado>0?'Parcial':'Activo';
     const clr=saldo<=0?'var(--green)':saldo>montoAjustado*.5?'var(--red)':'var(--amber)';
-    const cacBadge=ac.cacOrigen?`<br><span style="font-size:10px;color:var(--blue)">CAC ${fmt(ac.cacOrigen)}→${fmt(ac.cacActual||ac.cacOrigen)}</span>`:'';
+    const _acContrato=DB.contratos.find(x=>x.id===ac.contratoId);
+    const _tipoIndiceAc=(_acContrato&&_acContrato.tipoIndice)||'CAC';
+    const cacBadge=ac.cacOrigen?`<br><span style="font-size:10px;color:var(--blue)">${_tipoIndiceAc} ${fmt(ac.cacOrigen)}→${fmt(ac.cacActual||ac.cacOrigen)}</span>`:'';
     return `<tr>
       <td class="mono">${ac.numero}</td>
       <td>${proyNombre(ac.proyectoId)}</td>
@@ -4565,11 +4603,13 @@ function verDetalleCanje(id){
 async function actualizarCAC(id){
   const ac=DB.acopios.find(x=>x.id===id);
   if(!ac) return;
-  const nuevo=prompt(`Acopio: ${ac.descripcion}\nÍndice CAC origen: ${ac.cacOrigen}\nÍndice CAC actual (${ac.cacActual||ac.cacOrigen}):\n\nIngresá el nuevo valor del índice CAC:`);
+  const cont=DB.contratos.find(x=>x.id===ac.contratoId);
+  const tipo=(cont&&cont.tipoIndice)||'CAC';
+  const nuevo=prompt(`Acopio: ${ac.descripcion}\nÍndice ${tipo} origen: ${ac.cacOrigen}\nÍndice ${tipo} actual (${ac.cacActual||ac.cacOrigen}):\n\nIngresá el nuevo valor del índice ${tipo}:`);
   if(!nuevo||isNaN(parseFloat(nuevo))) return;
   await apiPut('acopios',id,{cacActual:parseFloat(nuevo)});
   await cargarDB();
-  toast('Índice CAC actualizado ✓');
+  toast('Índice '+tipo+' actualizado ✓');
   renderAcopios();
 }
 
