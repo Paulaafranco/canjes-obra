@@ -3068,9 +3068,58 @@ function _logoForProject(nombre){
   return match?LOGOS[match]:'';
 }
 function proyCard(p,compact=false){
-  const nCont=DB.contratos.filter(c=>c.proyectoId===p.id).length;
+  const conts=DB.contratos.filter(c=>c.proyectoId===p.id);
+  const nCont=conts.length;
   const nCanj=DB.canjes.filter(c=>c.proyectoId===p.id).length;
-  const saldo=DB.contratos.filter(c=>c.proyectoId===p.id).reduce((a,c)=>a+saldoContrato(c),0);
+
+  // KPIs por moneda
+  const kpiPorMon={};
+  conts.forEach(c=>{
+    const mon=c.moneda||'ARS';
+    if(!kpiPorMon[mon]) kpiPorMon[mon]={sCtaCte:0,sCanje:0,avances:[]};
+    const cons=consumidoContrato(c);
+    const pactCte=parseFloat(c.montoCtaCte||c.montoDinero)||0;
+    kpiPorMon[mon].sCtaCte+=Math.max(0,pactCte-cons.ctaCte);
+    // Canje: acopios > partes A/B > campo almacenado
+    const acopC=DB.acopios.filter(a=>a.contratoId===c.id);
+    if(acopC.length>0){
+      kpiPorMon[mon].sCanje+=acopC.reduce((s,ac)=>s+Math.max(0,montoAjustadoCAC(ac)-(parseFloat(ac.descontado)||0)),0);
+    } else if(tienePartesCanje(c)){
+      kpiPorMon[mon].sCanje+=saldoCanjeParte(c,'A')+saldoCanjeParte(c,'B');
+    } else {
+      kpiPorMon[mon].sCanje+=Math.max(0,saldoCanje(c));
+    }
+    if(c.estado==='Ejecutando') kpiPorMon[mon].avances.push(parseFloat(c.avance)||0);
+  });
+
+  const todasAvances=conts.filter(c=>c.estado==='Ejecutando').map(c=>parseFloat(c.avance)||0);
+  const avanceProm=todasAvances.length?Math.round(todasAvances.reduce((a,b)=>a+b,0)/todasAvances.length):null;
+
+  // Renderizar mini-KPIs por moneda
+  const kpiHtml=Object.keys(kpiPorMon).map(mon=>{
+    const k=kpiPorMon[mon];
+    const prefix=mon==='USD'?'USD ':'$ ';
+    return `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:80px;background:rgba(255,199,0,.08);border:1px solid rgba(255,199,0,.25);border-radius:6px;padding:6px 8px">
+        <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:2px">Saldo CTA CTE</div>
+        <div style="font-size:12px;font-weight:700;color:var(--amber)">${prefix}${fmt(k.sCtaCte)}</div>
+      </div>
+      <div style="flex:1;min-width:80px;background:rgba(26,106,191,.07);border:1px solid rgba(26,106,191,.2);border-radius:6px;padding:6px 8px">
+        <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:2px">Saldo Canje</div>
+        <div style="font-size:12px;font-weight:700;color:var(--blue)">${prefix}${fmt(k.sCanje)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const avanceHtml=avanceProm!==null
+    ?`<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${avanceProm}%;background:var(--green);border-radius:3px;transition:width .4s"></div>
+        </div>
+        <span style="font-size:11px;font-weight:600;color:var(--green)">${avanceProm}%</span>
+        <span style="font-size:10px;color:var(--text3)">avance</span>
+      </div>`
+    :'';
 
   const logoSrc=_logoForProject(p.nombre);
   const nombreHtml=logoSrc
@@ -3082,9 +3131,10 @@ function proyCard(p,compact=false){
     <div class="proy-stats">
       <span><strong>${nCont}</strong> contratos</span>
       <span><strong>${nCanj}</strong> canjes</span>
-      ${saldo>0?`<span style="color:var(--amber)"><strong>${fmt(saldo)}</strong> pendiente</span>`:''}
     </div>
-    <div class="proy-badges">
+    ${kpiHtml}
+    ${avanceHtml}
+    <div class="proy-badges" style="margin-top:8px">
       ${tipoProy(p.tipo)} ${badgeEstado(p.estado)}
     </div>
     <div class="proy-actions">
