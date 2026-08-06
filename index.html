@@ -686,10 +686,22 @@ table,td,th{font-family:'Ubuntu',sans-serif}
       </div>
 
       <div id="c-cac-section" style="display:none">
-        <div class="alert info"><span class="alert-icon">📊</span><span class="alert-text">Contrato en pesos — podés registrar el índice CAC de referencia.</span></div>
-        <div class="fr c2">
-          <div class="fg"><label>Índice CAC origen</label><input id="c-cac-origen" type="number" placeholder="Ej: 1250.45"><div class="hint">Índice del mes de firma</div></div>
-          <div class="fg"><label>Índice CAC actual</label><input id="c-cac-actual" type="number" placeholder="Ej: 1380.20"></div>
+        <div class="alert info"><span class="alert-icon">📊</span><span class="alert-text">Contrato en pesos — registrá el índice de actualización para seguir el ajuste.</span></div>
+        <div class="fr c2" style="margin-bottom:10px">
+          <div class="fg">
+            <label>Tipo de índice</label>
+            <select id="c-tipo-indice" onchange="onTipoIndice(this.value)">
+              <option value="">Sin actualización</option>
+              <option value="CAC">CAC (Cámara Argentina de la Construcción)</option>
+              <option value="IPC">IPC (Índice de Precios al Consumidor)</option>
+            </select>
+          </div>
+        </div>
+        <div id="c-indice-vals" style="display:none">
+          <div class="fr c2">
+            <div class="fg"><label id="c-indice-label-orig">Índice origen</label><input id="c-cac-origen" type="number" placeholder="Ej: 1250.45"><div class="hint">Valor del índice al mes de firma</div></div>
+            <div class="fg"><label id="c-indice-label-act">Índice actual</label><input id="c-cac-actual" type="number" placeholder="Ej: 1380.20"><div class="hint">Valor del índice hoy</div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1388,6 +1400,8 @@ async function cargarDB(){
       if(c.obs){
         const m=c.obs.match(/\[CANJEPARTES A ([\d.]+) B ([\d.]+)\]/);
         if(m){ c.canjeParteA=parseFloat(m[1])||0; c.canjeParteB=parseFloat(m[2])||0; }
+        const mi=c.obs.match(/\[INDICE (\w+)\]/);
+        if(mi){ c.tipoIndice=mi[1]; }
         // Precios de referencia: [PRECIOS nombre~precio~unidad|nombre2~precio2~unidad2]
         const mp=c.obs.match(/\[PRECIOS ([^\[]*?)\]/);
         if(mp&&mp[1].trim()){
@@ -1812,6 +1826,16 @@ function onMonedaContrato(val){
   const cacSec=document.getElementById('c-cac-section');
   if(cacSec) cacSec.style.display=val==='ARS'?'block':'none';
 }
+function onTipoIndice(val){
+  const valsDiv=document.getElementById('c-indice-vals');
+  if(!valsDiv) return;
+  if(!val){ valsDiv.style.display='none'; return; }
+  valsDiv.style.display='block';
+  const labelOrig=document.getElementById('c-indice-label-orig');
+  const labelAct=document.getElementById('c-indice-label-act');
+  if(labelOrig) labelOrig.textContent='Índice '+val+' origen';
+  if(labelAct) labelAct.textContent='Índice '+val+' actual';
+}
 
 // ─── GUARDAR PROYECTO ────────────────────────────────────
 async function guardarProyecto(){
@@ -1901,6 +1925,7 @@ async function guardarContrato(){
   const monto=parseFloat(document.getElementById('c-monto').value)||0;
   if(!proyId||!provId||!desc||!monto){ toast('Completá los campos obligatorios','error'); return; }
   const cMoneda=document.getElementById('c-moneda').value;
+  const cTipoIndice=cMoneda==='ARS'?(document.getElementById('c-tipo-indice')?.value||''):null;
   const cCacOrigen=cMoneda==='ARS'?(parseFloat(document.getElementById('c-cac-origen')?.value)||null):null;
   const cCacActual=cMoneda==='ARS'?(parseFloat(document.getElementById('c-cac-actual')?.value)||null):null;
   const ctacte=parseFloat(document.getElementById('c-ctacte').value)||0;
@@ -1924,6 +1949,11 @@ async function guardarContrato(){
   let obsConPartes=document.getElementById('c-obs-final').value||'';
   if(tienePartes&&((canjeParteA||0)>0||(canjeParteB||0)>0)){
     obsConPartes=(obsConPartes?obsConPartes+' ':'')+'[CANJEPARTES A '+(canjeParteA||0)+' B '+(canjeParteB||0)+']';
+  }
+  // Guardar tipo de índice (IPC/CAC) en obs si aplica
+  obsConPartes=obsConPartes.replace(/\s*\[INDICE \w+\]\s*/g,'').trim();
+  if(cTipoIndice&&cCacOrigen){
+    obsConPartes=(obsConPartes?obsConPartes+' ':'')+'[INDICE '+cTipoIndice+']';
   }
   const dataCont={numero:numCont,proyectoId:proyId,proveedorId:provId,descripcion:desc,categoria:document.getElementById('c-cat').value,inicio:document.getElementById('c-inicio').value||null,fin:document.getElementById('c-fin').value||null,monto,moneda:cMoneda,modalidad:modalidadAuto,montoDinero:ctacte,montoCanje:canjeM,montoCtaCte:ctacte,cacOrigen:cCacOrigen,cacActual:cCacActual,montoParteA,montoParteB,ivaParteA,ivaParteB,obs:obsConPartes};
   if(editId){
@@ -3163,7 +3193,7 @@ function contratoRow(c){
   const pct=avanceContrato(c);
   const cls=pct>=100?'g':pct>=60?'':'a';
   return `<tr onclick="abrirDetalleContrato('${c.id}')">
-    <td><span class="mono">${c.numero}</span><br><span style="font-size:11px;color:var(--text3)">${c.descripcion.substring(0,28)}${c.descripcion.length>28?'...':''}</span></td>
+    <td><span class="mono">${c.numero}</span><br><span style="font-size:11px;color:var(--text3)">${c.descripcion.substring(0,28)}${c.descripcion.length>28?'...':''}</span>${c.tipoIndice?`<br><span style="font-size:10px;color:var(--blue);font-weight:500">📊 ${c.tipoIndice}</span>`:''}</td>
     <td>${proy?`<span style="font-size:12px">${proy.nombre}</span>`:'<span style="color:var(--text3)">—</span>'}</td>
     <td>${provNombre(c.proveedorId)}</td>
     <td>${badgeModalidad(c.modalidad)}</td>
@@ -3200,8 +3230,15 @@ function editarContrato(id){
   document.getElementById('c-cac-actual').value=c.cacActual||'';
   document.getElementById('c-numero').value=c.numero||'';
 
-  // Observaciones: mostrar el texto sin el tag interno [CANJEPARTES A.. B..]
-  const obsLimpia=(c.obs||'').replace(/\s*\[CANJEPARTES A [\d.]+ B [\d.]+\]\s*/,'').trim();
+  // Pre-cargar tipo de índice (IPC / CAC / ninguno)
+  const tipoIndiceEl=document.getElementById('c-tipo-indice');
+  if(tipoIndiceEl){ tipoIndiceEl.value=c.tipoIndice||''; onTipoIndice(c.tipoIndice||''); }
+
+  // Observaciones: mostrar el texto sin los tags internos [CANJEPARTES …] e [INDICE …]
+  const obsLimpia=(c.obs||'')
+    .replace(/\s*\[CANJEPARTES A [\d.]+ B [\d.]+\]\s*/,'')
+    .replace(/\s*\[INDICE \w+\]\s*/g,'')
+    .trim();
   document.getElementById('c-obs-final').value=obsLimpia;
 
   const tienePartes=!!((parseFloat(c.montoParteA)||0)>0||(parseFloat(c.montoParteB)||0)>0);
@@ -3793,6 +3830,7 @@ function abrirDetalleContrato(id){
       <div><div style="color:var(--text3);margin-bottom:2px">Estado</div><div>${badgeEstado(c.estado)}</div></div>
       <div><div style="color:var(--text3);margin-bottom:2px">Inicio</div><div style="font-weight:500">${c.inicio||'—'}</div></div>
       <div><div style="color:var(--text3);margin-bottom:2px">Fin estimado</div><div style="font-weight:500">${c.fin||'—'}</div></div>
+      ${c.tipoIndice?`<div style="grid-column:1/-1"><div style="color:var(--text3);margin-bottom:2px">Índice de actualización</div><div><span class="badge badge-blue">📊 ${c.tipoIndice}</span>${c.cacOrigen?` <span style="font-size:11px;color:var(--text2)">${fmt(c.cacOrigen)} → ${fmt(c.cacActual||c.cacOrigen)}</span>`:''}</div></div>`:''}
     </div>
     <div style="margin-top:14px" id="det-avance-bolsillos-${c.id}"></div>`:`
     <div class="sumbox">
@@ -3815,6 +3853,7 @@ function abrirDetalleContrato(id){
       <div><div style="color:var(--text3);margin-bottom:2px">Estado</div><div>${badgeEstado(c.estado)}</div></div>
       <div><div style="color:var(--text3);margin-bottom:2px">Inicio</div><div style="font-weight:500">${c.inicio||'—'}</div></div>
       <div><div style="color:var(--text3);margin-bottom:2px">Fin estimado</div><div style="font-weight:500">${c.fin||'—'}</div></div>
+      ${c.tipoIndice?`<div style="grid-column:1/-1"><div style="color:var(--text3);margin-bottom:2px">Índice de actualización</div><div><span class="badge badge-blue">📊 ${c.tipoIndice}</span>${c.cacOrigen?` <span style="font-size:11px;color:var(--text2)">${fmt(c.cacOrigen)} → ${fmt(c.cacActual||c.cacOrigen)}</span>`:''}</div></div>`:''}
     </div>
     <div style="margin-top:14px" id="det-avance-bolsillos-${c.id}"></div>`;
   // Renderizar barras de avance por bolsillo (fuera del template para evitar escapes)
