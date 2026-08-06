@@ -269,7 +269,6 @@ table,td,th{font-family:'Ubuntu',sans-serif}
   <div class="nav-section">
     <div class="nav-label">Control</div>
     <div class="nav-item" onclick="nav('saldos',this)"><span class="nav-icon">💰</span>Saldos</div>
-    <div class="nav-item" onclick="nav('alertas',this)"><span class="nav-icon">🔔</span>Alertas<span class="nav-badge" id="badge-alertas">0</span></div>
   </div>
   <div class="sidebar-footer">v2.0 · Conectado a Supabase</div>
 </aside>
@@ -300,7 +299,7 @@ table,td,th{font-family:'Ubuntu',sans-serif}
       <div class="kpi"><div class="kpi-label">Proyectos activos</div><div class="kpi-val purple" id="kpi-proyectos">0</div><div class="kpi-sub">en obra</div></div>
       <div class="kpi"><div class="kpi-label">Contratos activos</div><div class="kpi-val" id="kpi-contratos">0</div><div class="kpi-sub">en ejecución</div></div>
       <div class="kpi"><div class="kpi-label">Saldo pendiente</div><div class="kpi-val amber" id="kpi-saldo">0</div><div class="kpi-sub">total</div></div>
-      <div class="kpi"><div class="kpi-label">Alertas</div><div class="kpi-val red" id="kpi-alertas">0</div><div class="kpi-sub">requieren atención</div></div>
+      <div class="kpi"><div class="kpi-label">Avance promedio</div><div class="kpi-val green" id="kpi-avance">—</div><div class="kpi-sub">de obra</div></div>
     </div>
     <div id="dash-alertas-strip"></div>
     <div class="card">
@@ -652,7 +651,13 @@ table,td,th{font-family:'Ubuntu',sans-serif}
         <div class="fg"><label>Moneda</label><select id="c-moneda" onchange="onMonedaContrato(this.value)"><option value="USD">USD</option><option value="ARS">ARS</option></select></div>
       </div>
 
-      <div class="sec-label">Desglose de pago</div>
+      <div class="sec-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Desglose de pago</span>
+        <span style="display:flex;gap:6px">
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px" onclick="setModalidadRapida('canje')">📦 Todo canje</button>
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px" onclick="setModalidadRapida('dinero')">💳 Todo CTA CTE</button>
+        </span>
+      </div>
       <div class="alert info" style="margin-bottom:12px"><span class="alert-icon">ℹ</span><span class="alert-text">Indicá cuánto se abona por cada vía. Podés dejar en cero lo que no aplique.</span></div>
 
       <div class="fr c2">
@@ -1716,6 +1721,21 @@ function llenarSelectContratos(sel,soloConCanje=false){
 // ─── MODALIDAD ───────────────────────────────────────────
 function selModalidad(m){ /* legacy */ }
 function calcCanje(){ calcBolsillos(); }
+function setModalidadRapida(modo){
+  const monto=parseFloat(document.getElementById('c-monto').value)||0;
+  if(!monto){ toast('Primero ingresá el monto total del contrato','warn'); return; }
+  const ctacteEl=document.getElementById('c-ctacte');
+  const canjeEl=document.getElementById('c-canje-monto');
+  if(ctacteEl.readOnly||canjeEl.readOnly){ toast('En modo Partes A/B los montos se calculan solos','info'); return; }
+  if(modo==='canje'){
+    ctacteEl.value=0;
+    canjeEl.value=monto;
+  } else {
+    ctacteEl.value=monto;
+    canjeEl.value=0;
+  }
+  calcBolsillos();
+}
 
 function calcBolsillos(){
   const total=parseFloat(document.getElementById('c-monto').value)||0;
@@ -2948,10 +2968,13 @@ function renderDashboard(){
   document.getElementById('dash-fecha').textContent='Actualizado '+new Date().toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const filtCont=contratosDelContexto();
   document.getElementById('kpi-proyectos').textContent=DB.proyectos.filter(p=>p.estado==='En obra').length;
-  document.getElementById('kpi-contratos').textContent=filtCont.filter(c=>c.estado==='Ejecutando').length;
+  const contActivos=filtCont.filter(c=>c.estado==='Ejecutando');
+  document.getElementById('kpi-contratos').textContent=contActivos.length;
   document.getElementById('kpi-saldo').textContent=fmt(filtCont.reduce((a,c)=>a+saldoContrato(c),0));
+  const avances=contActivos.map(c=>parseFloat(c.avance)||0);
+  const avanceProm=avances.length?Math.round(avances.reduce((a,b)=>a+b,0)/avances.length):0;
+  document.getElementById('kpi-avance').textContent=avanceProm+'%';
   const al=calcAlertas().length;
-  document.getElementById('kpi-alertas').textContent=al;
   document.getElementById('badge-alertas').textContent=al;
   // Strip de alertas
   const strip=document.getElementById('dash-alertas-strip');
@@ -4793,8 +4816,8 @@ async function guardarPreciosRef(){
 function generarInforme(){
   function _fmtNum(n){ return new Intl.NumberFormat('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n||0); }
   function _fmtMon(n,mon){ return (mon==='USD'?'USD ':'$ ')+_fmtNum(n); }
-  function _cell(txt,style){ return '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;vertical-align:top;'+(style||'')+'">'+txt+'</td>'; }
-  function _hcell(txt){ return '<th style="padding:6px 8px;border:1px solid #333;background:#0D0D0D;color:#FFC700;font-size:11px;text-align:left;white-space:nowrap">'+txt+'</th>'; }
+  function _cell(txt,style){ return '<td style="padding:7px 10px;border:1px solid #ddd;font-size:12px;vertical-align:top;font-family:\'Ubuntu\',sans-serif;'+(style||'')+'">'+txt+'</td>'; }
+  function _hcell(txt){ return '<th style="padding:7px 10px;border:1px solid #222;background:#0D0D0D;color:#FFC700;font-size:11px;text-align:left;white-space:nowrap;font-family:\'Work Sans\',sans-serif;font-weight:600;letter-spacing:.2px">'+txt+'</th>'; }
 
   // Recopilar datos de cada contrato
   var filas=[];
@@ -4889,8 +4912,8 @@ function generarInforme(){
       totPorMon[mon].sCanje+=f.sCanjeVal;
       var refHtml=f.referencia?('<span style="color:#555;font-size:11px">'+f.referencia+'</span>'):'';
       var filaBase='<tr>'+
-        _cell(f.descripcion)+
-        _cell(f.proveedor)+
+        _cell(f.descripcion,'font-weight:600;color:#111;font-size:12px')+
+        _cell(f.proveedor,'font-weight:500;color:#333')+
         _cell(_fmtMon(f.pactCtaCte,mon),'text-align:right')+
         _cell(f.consumidoCtaCte>0?_fmtMon(f.consumidoCtaCte,mon):'—','text-align:right;color:#555')+
         _cell(f.sCtaCte>0?'<strong>'+_fmtMon(f.sCtaCte,mon)+'</strong>':'—','text-align:right;color:#2e7d32')+
@@ -4901,12 +4924,12 @@ function generarInforme(){
       '</tr>';
       // Sub-filas de desglose (acopios o partes A/B)
       var subAcop=(f.subDetalles||[]).map(function(d){
-        return '<tr style="background:#f5f9ff">'+
-          _cell('<span style="color:#888;padding-left:16px">↳ '+d.label+'</span>')+
+        return '<tr style="background:#f0f4ff">'+
+          _cell('<span style="color:#3a4a6b;padding-left:20px;font-weight:500;font-size:11px">↳ '+d.label+'</span>')+
           _cell('')+_cell('')+_cell('')+_cell('')+
-          _cell(_fmtMon(d.monto,mon),'text-align:right;color:#888;font-size:11px')+
-          _cell(_fmtMon(d.consumido,mon),'text-align:right;color:#888;font-size:11px')+
-          _cell(d.saldo>0?'<strong>'+_fmtMon(d.saldo,mon)+'</strong>':'—','text-align:right;color:#1a6abf;font-size:11px')+
+          _cell(_fmtMon(d.monto,mon),'text-align:right;color:#444;font-size:11px;font-weight:500')+
+          _cell(_fmtMon(d.consumido,mon),'text-align:right;color:#444;font-size:11px')+
+          _cell(d.saldo>0?'<strong>'+_fmtMon(d.saldo,mon)+'</strong>':'—','text-align:right;color:#1a5abf;font-size:11px;font-weight:700')+
           _cell('')+'</tr>';
       }).join('');
       return filaBase+subAcop;
@@ -4945,17 +4968,22 @@ function generarInforme(){
   var fecha=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   var html='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'+
     '<title>Informe de contratos — '+fecha+'</title>'+
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'+
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'+
+    '<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">'+
     '<style>'+
-    'body{font-family:\'Work Sans\',Arial,sans-serif;margin:0;padding:0;color:#222;background:#f4f4f4}'+
-    '.page-wrap{max-width:1100px;margin:0 auto;padding:24px}'+
-    '.header{display:flex;justify-content:space-between;align-items:center;background:#0D0D0D;border-radius:8px;padding:16px 24px;margin-bottom:24px}'+
+    'body{font-family:\'Work Sans\',Arial,sans-serif;margin:0;padding:0;color:#222;background:#f0f0f0}'+
+    'table,td,th{font-family:\'Ubuntu\',sans-serif}'+
+    '.page-wrap{max-width:1160px;margin:0 auto;padding:28px}'+
+    '.header{display:flex;justify-content:space-between;align-items:center;background:#0D0D0D;border-radius:10px;padding:18px 28px;margin-bottom:28px;box-shadow:0 2px 8px rgba(0,0,0,.18)}'+
     '.header-left{display:flex;align-items:center;gap:16px}'+
     '.header-left img{height:44px;width:auto}'+
-    '.header-title{color:#fff;font-size:18px;font-weight:700;letter-spacing:-.3px}'+
-    '.header-sub{color:#FFC700;font-size:11px;font-weight:500;margin-top:3px}'+
-    '.header-fecha{color:#aaa;font-size:12px;text-align:right;line-height:1.6}'+
-    '.no-print{margin-bottom:16px}'+
-    '@media print{.no-print{display:none}.page-wrap{padding:10px}body{background:#fff}}'+
+    '.header-title{color:#fff;font-size:18px;font-weight:700;letter-spacing:-.3px;font-family:\'Work Sans\',sans-serif}'+
+    '.header-sub{color:#FFC700;font-size:11px;font-weight:500;margin-top:3px;font-family:\'Work Sans\',sans-serif}'+
+    '.header-fecha{color:#aaa;font-size:12px;text-align:right;line-height:1.7;font-family:\'Work Sans\',sans-serif}'+
+    '.no-print{margin-bottom:18px}'+
+    'tr:hover td{background-color:rgba(0,0,0,.025)}'+
+    '@media print{.no-print{display:none}.page-wrap{padding:10px}body{background:#fff}tr:hover td{background:none}}'+
     '</style></head><body>'+
     '<div class="page-wrap">'+
     '<div class="no-print">'+
