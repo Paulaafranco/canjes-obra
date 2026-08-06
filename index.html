@@ -3351,15 +3351,14 @@ function renderCanjes(){
   if(!lista.length){ tbody.innerHTML='<tr><td colspan="9"><div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Sin canjes</div></div></td></tr>'; return; }
   tbody.innerHTML=[...lista].reverse().map(cj=>{
     const c=DB.contratos.find(x=>x.id===cj.contratoId);
-    // % real consumido = suma de descuentoAcopio en certificados del contrato,
-    // atribuido a la parte correcta si el canje tiene tag Parte A o B en unidadTipo.
-    // Bug anterior: se sumaba el total del contrato y se dividía por el valorAcordado
-    // de CADA canje individual → la parte con menor valorAcordado llegaba al 100% sin serlo.
-    const certsCanje=DB.certificados.filter(x=>x.contratoId===cj.contratoId);
+    // % real consumido — usa consumidoContrato() para que funcione tanto con certificados
+    // (obra/servicios) como con facturas (materiales). Dentro, si el contrato tiene Partes A/B,
+    // atribuye el canje a cada parte según el split guardado en obs del certificado.
     const parte=parteDeCanje(cj);
     let canjeUsado;
     if(parte&&c&&tienePartesCanje(c)){
-      // Calcular la proporción del canje que corresponde a cada parte según el contrato
+      // Contrato con partes: reconstruir desde certificados con split por parte
+      const certsCanje=DB.certificados.filter(x=>x.contratoId===cj.contratoId);
       const montoA=parseFloat(c.montoParteA)||0;
       const montoB=parseFloat(c.montoParteB)||0;
       const pctA=parseFloat(c.canjeParteA)||0;
@@ -3367,30 +3366,23 @@ function renderCanjes(){
       const canjeMontoA=montoA*(pctA/100);
       const canjeMontoB=montoB*(pctB/100);
       const totalCanje=canjeMontoA+canjeMontoB;
-      // Parsear números formateados con fmt() en es-AR (usa "." como sep. de miles, sin decimales)
       const parseFmt=v=>parseFloat((v||'0').replace(/\./g,''))||0;
       canjeUsado=certsCanje.reduce((s,x)=>{
         const acopio=parseFloat(x.descuentoAcopio)||0;
         if(!acopio) return s;
-        // Intentar leer el split Parte A / Parte B guardado en obs del certificado
         const mObs=(x.obs||'').match(/Parte A:\s*([\d.]+)\s*\/\s*Parte B:\s*([\d.]+)/);
         if(mObs){
           const certA=parseFmt(mObs[1]);
           const certB=parseFmt(mObs[2]);
           const totalCert=certA+certB;
-          if(totalCert>0){
-            // Atribuir solo la proporción de esta parte
-            return s+acopio*(parte==='A'?certA/totalCert:certB/totalCert);
-          }
+          if(totalCert>0) return s+acopio*(parte==='A'?certA/totalCert:certB/totalCert);
         }
-        // Sin info de parte en obs (cert cargado antes de la feature): distribuir
-        // por la proporción del contrato (canjeMontoA vs canjeMontoB)
         const ratio=totalCanje>0?(parte==='A'?canjeMontoA/totalCanje:canjeMontoB/totalCanje):0.5;
         return s+acopio*ratio;
       },0);
     } else {
-      // Contrato sin partes: sumar todo como antes
-      canjeUsado=certsCanje.reduce((s,x)=>s+(parseFloat(x.descuentoAcopio)||0),0);
+      // Sin partes: usar consumidoContrato() que ya sabe si leer de facturas o certificados
+      canjeUsado=c?consumidoContrato(c).canje:0;
     }
     const pactadoCanj=parseFloat(cj.valorAcordado)||0;
     const pct=pactadoCanj>0?Math.min(100,Math.round(canjeUsado/pactadoCanj*100)):0;
