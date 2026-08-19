@@ -948,7 +948,16 @@ table,td,th{font-family:'Ubuntu',sans-serif}
     </div>
     <div class="fr c2">
       <div class="fg"><label>💳 Cta. corriente</label><input id="fact-ctacte" type="number" placeholder="0"></div>
-      <div class="fg"><label>📦 Canje</label><input id="fact-canje" type="number" placeholder="0"></div>
+      <div class="fg"><label>📦 Canje</label><input id="fact-canje" type="number" placeholder="0" oninput="onFactCanjeChange()"></div>
+    </div>
+    <div id="fact-parte-canje-fg" style="display:none;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2)">¿A qué parte del canje corresponde esta factura?</label>
+      <select id="fact-parte-canje" style="margin-top:4px;width:100%">
+        <option value="">Sin especificar</option>
+        <option value="A">Parte A</option>
+        <option value="B">Parte B</option>
+      </select>
+      <div class="hint" id="fact-parte-canje-hint">Indicá a qué parte se imputa el monto en canje.</div>
     </div>
     <div class="fg"><label>CAE (AFIP)</label><input id="fact-cae" type="text" placeholder="Vacío si no tiene CAE"><div class="hint">El número de autorización electrónica de AFIP. Dejalo en blanco para facturas informales o remitos.</div></div>
     <div class="fg"><label>Observaciones</label><textarea id="fact-obs" placeholder="Notas adicionales..."></textarea></div>
@@ -1500,7 +1509,22 @@ function parteDeCert(cert){
   return null;
 }
 function imputadoCanjeParte(c,parte){
-  return DB.canjes.filter(x=>x.contratoId===c.id&&parteDeCanje(x)===parte).reduce((s,x)=>s+(parseFloat(x.montoImputado)||0),0);
+  // Fuente 1: acuerdos de canje (canjes table)
+  const desdeCanjes=DB.canjes.filter(x=>x.contratoId===c.id&&parteDeCanje(x)===parte).reduce((s,x)=>s+(parseFloat(x.montoImputado)||0),0);
+  // Fuente 2: facturas con tag [PARTE_CANJE X] en obs
+  const facts=(DB.facturas||[]).filter(x=>x.contratoId===c.id&&(parseFloat(x.montoCanje)||0)>0);
+  const pctA=parseFloat(c.canjeParteA)||0, pctB=parseFloat(c.canjeParteB)||0;
+  const montoA=parseFloat(c.montoParteA)||0, montoB=parseFloat(c.montoParteB)||0;
+  const canjeA=montoA*(pctA/100), canjeB=montoB*(pctB/100), totalCanje=canjeA+canjeB;
+  const desdeFacturas=facts.reduce((s,f)=>{
+    const mCanje=parseFloat(f.montoCanje)||0;
+    const m=(f.obs||'').match(/\[PARTE_CANJE ([AB])\]/);
+    if(m){ return m[1]===parte?s+mCanje:s; }
+    // Sin tag: distribuir proporcionalmente entre A y B
+    const ratio=totalCanje>0?(parte==='A'?canjeA/totalCanje:canjeB/totalCanje):0.5;
+    return s+mCanje*ratio;
+  },0);
+  return desdeCanjes+desdeFacturas;
 }
 function saldoCanjeParte(c,parte){
   // c.canjeParteA/B son % fijos (0-100) sobre el monto de esa parte, no montos directos.
@@ -3041,7 +3065,8 @@ function renderDashboard(){
   const avanceProm=avances.length?Math.round(avances.reduce((a,b)=>a+b,0)/avances.length):0;
   document.getElementById('kpi-avance').textContent=avanceProm+'%';
   const al=calcAlertas().length;
-  document.getElementById('badge-alertas').textContent=al;
+  const _badgeAl=document.getElementById('badge-alertas');
+  if(_badgeAl) _badgeAl.textContent=al;
   // Strip de alertas
   const strip=document.getElementById('dash-alertas-strip');
   const als=calcAlertas().slice(0,2);
@@ -3747,7 +3772,8 @@ function calcAlertas(){
 }
 function renderAlertas(){
   const al=calcAlertas();
-  document.getElementById('badge-alertas').textContent=al.length;
+  const _badgeAl2=document.getElementById('badge-alertas');
+  if(_badgeAl2) _badgeAl2.textContent=al.length;
   const cont=document.getElementById('alertas-content');
   cont.innerHTML=al.length?al.map(a=>`<div class="alert ${a.tipo}"><span class="alert-icon">${a.tipo==='error'?'🔴':'🟡'}</span><span class="alert-text">${a.texto}</span></div>`).join(''):'<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Sin alertas activas</div><div class="empty-sub">Todo en orden</div></div>';
 }
@@ -4261,6 +4287,27 @@ function onFactContratoChange(id){
   if(id) contratoDetalleId=id;
   var c=DB.contratos.find(function(x){ return x.id===id; });
   document.getElementById('fact-contrato-info').textContent=c?c.numero+' — '+(c.descripcion||'').substring(0,40):'';
+  _actualizarSelectorParteFactura(c);
+}
+function _actualizarSelectorParteFactura(c){
+  var fg=document.getElementById('fact-parte-canje-fg');
+  if(!fg) return;
+  var tienePartes=c&&tienePartesCanje(c);
+  var canje=parseFloat(document.getElementById('fact-canje')?.value)||0;
+  fg.style.display=(tienePartes&&canje>0)?'block':'none';
+  if(tienePartes&&c){
+    // Etiquetas descriptivas con el % de cada parte
+    var sel=document.getElementById('fact-parte-canje');
+    var pctA=parseFloat(c.canjeParteA)||0, pctB=parseFloat(c.canjeParteB)||0;
+    sel.innerHTML='<option value="">Sin especificar</option>'+
+      (pctA>0?'<option value="A">Parte A ('+pctA+'% canje)</option>':'')+
+      (pctB>0?'<option value="B">Parte B ('+pctB+'% canje)</option>':'');
+  }
+}
+function onFactCanjeChange(){
+  var id=document.getElementById('fact-contrato-sel')?.value||contratoDetalleId;
+  var c=DB.contratos.find(function(x){ return x.id===id; });
+  _actualizarSelectorParteFactura(c);
 }
 
 function openNuevaFactura(){
@@ -4280,6 +4327,9 @@ function openNuevaFactura(){
   document.getElementById('fact-ctacte').value='';
   document.getElementById('fact-cae').value='';
   document.getElementById('fact-obs').value='';
+  // Ocultar selector de parte hasta que se ingrese canje
+  var fg=document.getElementById('fact-parte-canje-fg');
+  if(fg) fg.style.display='none';
   openModal('modal-factura');
 }
 
@@ -4301,7 +4351,12 @@ async function guardarFactura(){
   var canje=parseFloat(document.getElementById('fact-canje').value)||0;
   var ctaCte=parseFloat(document.getElementById('fact-ctacte').value)||0;
   var caeVal=document.getElementById('fact-cae').value.trim()||null;
+  var parteCanje=canje>0?(document.getElementById('fact-parte-canje')?.value||''):'';
   if(!total){ toast('Ingresá el total de la factura','error'); return; }
+  // Construir obs: texto libre + tag [PARTE_CANJE X] si aplica
+  var obsBase=document.getElementById('fact-obs').value.trim()||'';
+  obsBase=obsBase.replace(/\s*\[PARTE_CANJE [AB]\]\s*/g,'').trim();
+  if(parteCanje) obsBase=(obsBase?obsBase+' ':'')+'[PARTE_CANJE '+parteCanje+']';
   var payload={
     contratoId:c.id,
     proyectoId:c.proyectoId,
@@ -4317,7 +4372,7 @@ async function guardarFactura(){
     tieneCae:!!caeVal,
     cae:caeVal,
     estado:'Registrada',
-    obs:document.getElementById('fact-obs').value.trim()||null
+    obs:obsBase||null
   };
   var res;
   if(_facturaEditId){
