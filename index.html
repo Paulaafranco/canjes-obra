@@ -3546,7 +3546,7 @@ function renderSaldos(){
       let consumidoCanje, sCanjeVal, montoCanjePactado=montoCanje;
       let filasDetalle='';
       if(tienePartes){
-        // Prioridad: contratos con partes A/B siempre usan esta rama (aunque tengan acopios)
+        // Contratos con partes A/B: mostrar las 3 partes discriminadas
         const pctA=parseFloat(c.canjeParteA)||0, pctB=parseFloat(c.canjeParteB)||0;
         const montoA=parseFloat(c.montoParteA)||0, montoB=parseFloat(c.montoParteB)||0;
         const canjeA=montoA*(pctA/100), canjeB=montoB*(pctB/100);
@@ -3555,7 +3555,7 @@ function renderSaldos(){
         montoCanjePactado=canjeA+canjeB;
         consumidoCanje=impA+impB;
         sCanjeVal=saldoA+saldoB;
-        const _subParte=(label,montoP,canjeP,impP,saldoP)=>{
+        const _subCanje=(label,montoP,canjeP,impP,saldoP)=>{
           if(canjeP<=0) return '';
           const clr=saldoP<=0?'var(--green)':saldoP<canjeP*0.2?'var(--amber)':'var(--blue)';
           return `<tr style="background:var(--bg2);font-size:12px">
@@ -3567,9 +3567,24 @@ function renderSaldos(){
             <td style="text-align:right;font-weight:600;color:${clr}">${fmt(saldoP)}</td>
           </tr>`;
         };
-        // Siempre mostrar Parte A y Parte B: imputadoCanjeParte ya combina
-        // acopios.descontado (Parte A) + facturas [PARTE_CANJE X] (Parte B)
-        filasDetalle=_subParte('Parte A',montoA,canjeA,impA,saldoA)+_subParte('Parte B',montoB,canjeB,impB,saldoB);
+        if(acopiosC.length>0){
+          // Contrato especial con acopios: mostrar Cta. Corriente + partes canje con nombre de acopio
+          const labelA=acopiosC[0].descripcion||acopiosC[0].numero||'Acopio';
+          const labelB=acopiosC.length>=2?(acopiosC[1].descripcion||acopiosC[1].numero||'Parte B'):'Parte B';
+          const clrCte=sCtaCte<=0?'var(--green)':sCtaCte<pactCtaCte*0.1?'var(--amber)':'var(--text1)';
+          const filaCte=pactCtaCte>0?`<tr style="background:var(--bg2);font-size:12px">
+            <td style="padding-left:28px;color:var(--text3)">↳ Cta. Corriente</td>
+            <td style="color:var(--text2)">${mon} ${fmt(pactCtaCte)} total</td>
+            <td style="text-align:right;color:var(--text2)">${fmt(pactCtaCte)}</td>
+            <td style="text-align:right;color:var(--text2)">${fmt(consumidoCtaCte)}</td>
+            <td style="text-align:right;font-weight:600;color:${clrCte}">${fmt(sCtaCte)}</td>
+            <td></td><td></td><td></td>
+          </tr>`:'';
+          filasDetalle=filaCte+_subCanje(labelA,montoA,canjeA,impA,saldoA)+_subCanje(labelB,montoB,canjeB,impB,saldoB);
+        } else {
+          // Contrato estándar con partes: solo Parte A y Parte B
+          filasDetalle=_subCanje('Parte A',montoA,canjeA,impA,saldoA)+_subCanje('Parte B',montoB,canjeB,impB,saldoB);
+        }
       } else if(acopiosC.length>0){
         // Fuente: acopios individuales (contratos sin partes A/B)
         consumidoCanje=acopiosC.reduce((s,ac)=>s+(parseFloat(ac.descontado)||0),0);
@@ -5032,9 +5047,18 @@ function generarInforme(){
       montoCanjePactado=canjeA+canjeB;
       consumidoCanje=impA+impB;
       sCanjeVal=saldoA+saldoB;
-      // Siempre Parte A y Parte B: imputadoCanjeParte combina acopios + facturas
-      if(canjeA>0) subDetalles.push({label:'Parte A ('+mon+' '+_fmtNum(montoA)+' total)',monto:canjeA,consumido:impA,saldo:saldoA});
-      if(canjeB>0) subDetalles.push({label:'Parte B ('+mon+' '+_fmtNum(montoB)+' total)',monto:canjeB,consumido:impB,saldo:saldoB});
+      if(acopiosC.length>0){
+        // Contrato especial con acopios: Cta. Corriente + partes canje con nombre de acopio
+        var lblA=acopiosC[0].descripcion||acopiosC[0].numero||'Acopio';
+        var lblB=acopiosC.length>=2?(acopiosC[1].descripcion||acopiosC[1].numero||'Parte B'):'Parte B';
+        if(pactCtaCte>0) subDetalles.push({label:'Cta. Corriente',monto:pactCtaCte,consumido:consumidoCtaCte,saldo:sCtaCte,esCte:true});
+        if(canjeA>0) subDetalles.push({label:lblA+' ('+mon+' '+_fmtNum(montoA)+' total)',monto:canjeA,consumido:impA,saldo:saldoA});
+        if(canjeB>0) subDetalles.push({label:lblB+' ('+mon+' '+_fmtNum(montoB)+' total)',monto:canjeB,consumido:impB,saldo:saldoB});
+      } else {
+        // Contrato estándar con partes: solo Parte A y Parte B
+        if(canjeA>0) subDetalles.push({label:'Parte A ('+mon+' '+_fmtNum(montoA)+' total)',monto:canjeA,consumido:impA,saldo:saldoA});
+        if(canjeB>0) subDetalles.push({label:'Parte B ('+mon+' '+_fmtNum(montoB)+' total)',monto:canjeB,consumido:impB,saldo:saldoB});
+      }
     } else if(acopiosC.length>0){
       // Contratos sin partes A/B pero con acopios
       consumidoCanje=acopiosC.reduce(function(s,ac){ return s+(parseFloat(ac.descontado)||0); },0);
@@ -5113,13 +5137,30 @@ function generarInforme(){
         _cell(f.sCanjeVal>0?'<strong>'+_fmtMon(f.sCanjeVal,mon)+'</strong>':'—','text-align:right;color:#1a6abf')+
         _cell(refHtml,'max-width:180px')+
       '</tr>';
-      // Sub-filas de desglose (acopios o partes A/B)
+      // Sub-filas de desglose (cta cte, acopio, empresa 5)
       var subAcop=(f.subDetalles||[]).map(function(d){
+        if(d.esCte){
+          // Cta. Corriente → columnas 3-5
+          return '<tr style="background:#f8f8f0">'+
+            _cell('<span style="color:#555;padding-left:20px;font-size:11px">↳ '+d.label+'</span>')+
+            _cell('')+
+            _cell(_fmtMon(d.monto,mon),'text-align:right;color:#444;font-size:11px;font-weight:500')+
+            _cell(d.consumido>0?_fmtMon(d.consumido,mon):'—','text-align:right;color:#444;font-size:11px')+
+            _cell(d.saldo>0?'<strong>'+_fmtMon(d.saldo,mon)+'</strong>':'—','text-align:right;color:#2e7d32;font-size:11px;font-weight:700')+
+            _cell('—','text-align:right;color:#ccc;font-size:11px')+
+            _cell('—','text-align:right;color:#ccc;font-size:11px')+
+            _cell('—','text-align:right;color:#ccc;font-size:11px')+
+            _cell('')+'</tr>';
+        }
+        // Canje (acopio / empresa 5) → columnas 6-8
         return '<tr style="background:#f0f4ff">'+
           _cell('<span style="color:#3a4a6b;padding-left:20px;font-weight:500;font-size:11px">↳ '+d.label+'</span>')+
-          _cell('')+_cell('')+_cell('')+_cell('')+
+          _cell('')+
+          _cell('—','text-align:right;color:#ccc;font-size:11px')+
+          _cell('—','text-align:right;color:#ccc;font-size:11px')+
+          _cell('—','text-align:right;color:#ccc;font-size:11px')+
           _cell(_fmtMon(d.monto,mon),'text-align:right;color:#444;font-size:11px;font-weight:500')+
-          _cell(_fmtMon(d.consumido,mon),'text-align:right;color:#444;font-size:11px')+
+          _cell(d.consumido>0?_fmtMon(d.consumido,mon):'—','text-align:right;color:#444;font-size:11px')+
           _cell(d.saldo>0?'<strong>'+_fmtMon(d.saldo,mon)+'</strong>':'—','text-align:right;color:#1a5abf;font-size:11px;font-weight:700')+
           _cell('')+'</tr>';
       }).join('');
