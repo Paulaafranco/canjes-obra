@@ -1767,7 +1767,10 @@ function llenarSelectContratos(sel,soloConCanje=false){
   DB.contratos.forEach(c=>{
     if(soloConCanje&&c.modalidad==='Solo dinero') return;
     const o=document.createElement('option'); o.value=c.id;
-    o.textContent=c.numero+' · '+proyNombre(c.proyectoId)+' · '+provNombre(c.proveedorId);
+    const desc=(c.descripcion||'').trim()||c.numero;
+    const prov=provNombre(c.proveedorId);
+    const proy=proyNombre(c.proyectoId);
+    o.textContent=prov+' — '+desc.substring(0,40)+' ('+proy+')';
     s.appendChild(o);
   });
 }
@@ -4300,10 +4303,12 @@ function _llenarSelectorContratos(selId, selectedId){
   var mats=todos.filter(function(c){ return c.categoria==='Materiales'; });
   var otros=todos.filter(function(c){ return c.categoria!=='Materiales'; });
   var opsMat=mats.map(function(c){
-    return '<option value="'+c.id+'"'+(c.id===selectedId?' selected':'')+'>'+c.numero+' — '+(c.descripcion||'').substring(0,38)+'</option>';
+    var desc=(c.descripcion||'').trim()||c.numero;
+    return '<option value="'+c.id+'"'+(c.id===selectedId?' selected':'')+'>'+provNombre(c.proveedorId)+' — '+desc.substring(0,38)+' ('+proyNombre(c.proyectoId)+')</option>';
   }).join('');
   var opsOtros=otros.map(function(c){
-    return '<option value="'+c.id+'"'+(c.id===selectedId?' selected':'')+'>'+c.numero+' — '+(c.descripcion||'').substring(0,30)+' ('+c.categoria+')</option>';
+    var desc=(c.descripcion||'').trim()||c.numero;
+    return '<option value="'+c.id+'"'+(c.id===selectedId?' selected':'')+'>'+provNombre(c.proveedorId)+' — '+desc.substring(0,30)+' ('+proyNombre(c.proyectoId)+')</option>';
   }).join('');
   sel.innerHTML='<option value="">— Elegí un contrato —</option>'+
     (opsMat?'<optgroup label="Materiales">'+opsMat+'</optgroup>':'')+
