@@ -1,4 +1,4 @@
-<!-- v2026-08-20-e -->
+<!-- v2026-08-21-b -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -48,6 +48,19 @@ body{font-family:'Work Sans',sans-serif;background:var(--bg);color:var(--text);f
 .nav-icon{font-size:15px;flex-shrink:0}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:20px;line-height:1.4}
 .sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid #1C1C1C;font-size:11px;color:#555550}
+/* LOGIN */
+#login-overlay{position:fixed;inset:0;background:#0D0D0D;z-index:99999;display:flex;align-items:center;justify-content:center}
+.login-box{background:#1A1A1A;border:1px solid #2A2A2A;border-radius:16px;padding:40px 36px;width:340px;max-width:90vw}
+.login-brand{text-align:center;margin-bottom:28px}
+.login-brand .brand-logo{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.5px}
+.login-brand .brand-sub{font-size:12px;color:var(--brand-yellow);margin-top:4px}
+.login-box label{display:block;font-size:12px;font-weight:600;color:#A09D96;margin-bottom:5px;margin-top:14px}
+.login-box select,.login-box input{width:100%;padding:9px 12px;border-radius:8px;border:1px solid #333;background:#111;color:#fff;font-size:14px;font-family:inherit;outline:none}
+.login-box select:focus,.login-box input:focus{border-color:var(--brand-yellow)}
+.login-box select option{background:#1A1A1A}
+#login-error{display:none;color:#F87171;font-size:12px;margin-top:10px;text-align:center}
+.login-btn{width:100%;margin-top:20px;padding:11px;background:var(--brand-yellow);color:#1A1500;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.login-btn:hover{opacity:.9}
 
 /* MAIN */
 .main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
@@ -237,7 +250,30 @@ table,td,th{font-family:'Ubuntu',sans-serif}
 </head>
 <body>
 <div id="sinergia-watermark" aria-hidden="true"></div>
-<div style="position:fixed;bottom:6px;right:8px;font-size:10px;color:#999;z-index:9999;pointer-events:none;font-family:monospace">v2026-08-20-d</div>
+<div style="position:fixed;bottom:6px;right:8px;font-size:10px;color:#999;z-index:9999;pointer-events:none;font-family:monospace">v2026-08-21-b</div>
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-brand">
+      <div class="brand-logo">SINERGIA</div>
+      <div class="brand-sub">GESTIÓN DE CANJES Y OBRAS</div>
+    </div>
+    <label>Usuario</label>
+    <select id="login-usuario">
+      <option value="">Seleccioná tu usuario...</option>
+      <option>Paula</option>
+      <option>Ruth</option>
+      <option>Mateo</option>
+      <option>Sofia</option>
+      <option>Cristian</option>
+    </select>
+    <label>Contraseña</label>
+    <input id="login-pass" type="password" placeholder="Tu contraseña">
+    <div id="login-error">Usuario o contraseña incorrectos</div>
+    <button class="login-btn" onclick="loginApp()">Ingresar</button>
+  </div>
+</div>
+
 <div class="app">
 
 <!-- SIDEBAR -->
@@ -272,7 +308,13 @@ table,td,th{font-family:'Ubuntu',sans-serif}
     <div class="nav-label">Control</div>
     <div class="nav-item" onclick="nav('saldos',this)"><span class="nav-icon">💰</span>Saldos</div>
   </div>
-  <div class="sidebar-footer">v2.0 · Conectado a Supabase</div>
+  <div class="sidebar-footer" style="display:flex;flex-direction:column;gap:6px">
+    <div id="usuario-display" style="color:var(--brand-yellow);font-weight:600">👤 —</div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span>v2.0 · Supabase</span>
+      <span onclick="logoutApp()" style="color:#F87171;cursor:pointer;font-weight:500">Salir</span>
+    </div>
+  </div>
 </aside>
 
 <!-- MAIN -->
@@ -948,9 +990,17 @@ table,td,th{font-family:'Ubuntu',sans-serif}
       <div class="fg"><label>IVA</label><input id="fact-iva" type="number" placeholder="0" oninput="calcTotalFact()"></div>
       <div class="fg"><label>Total</label><input id="fact-total" type="number" placeholder="0" style="font-weight:700"></div>
     </div>
+    <div id="fact-tc-section" style="display:none;background:var(--blue-bg);border:1px solid #BFDBFE;border-radius:var(--radius);padding:12px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:600;color:var(--blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">💱 Conversión ARS → USD</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">El contrato está en USD. Ingresá el canje en pesos y el tipo de cambio para que la app lo convierta automáticamente.</div>
+      <div class="fr c2">
+        <div class="fg"><label>Tipo de cambio (ARS por 1 USD)</label><input id="fact-tipo-cambio" type="number" placeholder="Ej: 1250" oninput="calcCanjeUSD()"><div class="hint">Cotización del dólar al momento de la factura.</div></div>
+        <div class="fg"><label>Equivalente en USD (calculado)</label><input id="fact-canje-usd" type="text" placeholder="—" readonly style="font-weight:700;color:var(--blue);background:var(--surface2)"></div>
+      </div>
+    </div>
     <div class="fr c2">
       <div class="fg"><label>💳 Cta. corriente</label><input id="fact-ctacte" type="number" placeholder="0"></div>
-      <div class="fg"><label>📦 Canje</label><input id="fact-canje" type="number" placeholder="0" oninput="onFactCanjeChange()"></div>
+      <div class="fg"><label id="fact-canje-label">📦 Canje</label><input id="fact-canje" type="number" placeholder="0" oninput="onFactCanjeChange()"></div>
     </div>
     <div id="fact-parte-canje-fg" style="display:none;margin-bottom:8px">
       <label style="font-size:12px;font-weight:600;color:var(--text2)">¿A qué parte del canje corresponde esta factura?</label>
@@ -1362,6 +1412,41 @@ table,td,th{font-family:'Ubuntu',sans-serif}
 // ─── SUPABASE ─────────────────────────────────────────────
 const SB_URL = 'https://sfhzzruuxnkwasqhqcjo.supabase.co';
 const SB_KEY = 'sb_publishable_jD2mcIWQh5hLjqnTlxvZgw_4B-TnFWA';
+
+// ── USUARIOS ──────────────────────────────────────────────
+var currentUser = null;
+const USUARIOS = {
+  'Paula':   'paula2025',
+  'Ruth':    'ruth2025',
+  'Mateo':   'mateo2025',
+  'Sofia':   'sofia2025',
+  'Cristian':'cris2025'
+};
+function loginApp(){
+  var usuario=document.getElementById('login-usuario').value;
+  var pass=document.getElementById('login-pass').value;
+  var err=document.getElementById('login-error');
+  if(!USUARIOS[usuario]||USUARIOS[usuario]!==pass){
+    err.style.display='block';
+    document.getElementById('login-pass').value='';
+    return;
+  }
+  currentUser=usuario;
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('usuario-display').textContent='👤 '+usuario;
+  iniciar();
+}
+function logoutApp(){
+  if(!confirm('¿Cerrar sesión?')) return;
+  currentUser=null;
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-usuario').value='';
+  document.getElementById('login-error').style.display='none';
+  document.getElementById('login-overlay').style.display='flex';
+}
+document.addEventListener('keydown',function(e){
+  if(document.getElementById('login-overlay').style.display!=='none'&&e.key==='Enter') loginApp();
+});
 
 let DB = { proyectos:[], proveedores:[], contratos:[], canjes:[], certificados:[], acopios:[] };
 let wizStep = { c:1, cj:1 };
@@ -2060,7 +2145,7 @@ async function guardarCanje(){
   if(!cId||!_canjeDatos.unidadNombre||!_canjeDatos.valor){ toast('Faltan datos del acuerdo — volvé al paso 2','error'); return; }
   const c=DB.contratos.find(x=>x.id===cId);
   const n=(DB.canjes.length+1).toString().padStart(3,'0');
-  await apiPost('canjes',{numero:'CANJE-'+new Date().getFullYear()+'-'+n,contratoId:cId,proyectoId:c?c.proyectoId:'',unidadNombre:_canjeDatos.unidadNombre,unidadTipo:_canjeDatos.unidadTipo,valorAcordado:_canjeDatos.valor,montoImputado:_canjeDatos.imputar,instrumento:document.getElementById('cj-instrumento').value,fecha:document.getElementById('cj-fecha').value||null,vence:document.getElementById('cj-vence').value||null,estado:'En curso'});
+  await apiPost('canjes',{numero:'CANJE-'+new Date().getFullYear()+'-'+n,contratoId:cId,proyectoId:c?c.proyectoId:'',unidadNombre:_canjeDatos.unidadNombre,unidadTipo:_canjeDatos.unidadTipo,valorAcordado:_canjeDatos.valor,montoImputado:_canjeDatos.imputar,instrumento:document.getElementById('cj-instrumento').value,fecha:document.getElementById('cj-fecha').value||null,vence:document.getElementById('cj-vence').value||null,estado:'En curso',cargadoPor:currentUser});
   if(c) await apiPut('contratos',cId,{imputadoCanje:(c.imputadoCanje||0)+_canjeDatos.imputar});
   _canjeDatos={};
   await cargarDB(); closeModal(); toast('Canje guardado ✓'); renderCanjes(); renderDashboard();
@@ -2364,7 +2449,8 @@ async function guardarCertificado(){
     descuentoAcopio:descAcopio,
     montoActualizacionCac:montoCac,
     obs:obsFinalCert,
-    estado:'Aprobado', fecha:new Date().toISOString()
+    estado:'Aprobado', fecha:new Date().toISOString(),
+    cargadoPor:currentUser
   });
   if(resCert&&resCert.error){ toast('Error al guardar: '+resCert.message,'error'); return; }
 
@@ -2852,7 +2938,8 @@ async function guardarAcopio(){
     numero:'ACOP-'+n, contratoId:cId, proyectoId:c?c.proyectoId:'',
     descripcion, monto, moneda, itemsJSON, cantidad, unidad, precioUnit,
     cacOrigen, cacActual, descontado:0,
-    fecha:document.getElementById('ac-fecha').value||null, estado:'Activo'
+    fecha:document.getElementById('ac-fecha').value||null, estado:'Activo',
+    cargadoPor:currentUser
   };
   const res=await apiPost('acopios',payload);
   if(res&&res.error){
@@ -4322,6 +4409,27 @@ function onFactContratoChange(id){
   var c=DB.contratos.find(function(x){ return x.id===id; });
   document.getElementById('fact-contrato-info').textContent=c?c.numero+' — '+(c.descripcion||'').substring(0,40):'';
   _actualizarSelectorParteFactura(c);
+  _updateFactTCSection(c);
+}
+function _updateFactTCSection(c){
+  var tcSec=document.getElementById('fact-tc-section');
+  var canjeLabel=document.getElementById('fact-canje-label');
+  if(!tcSec) return;
+  var needsTC=c&&c.moneda==='USD';
+  tcSec.style.display=needsTC?'block':'none';
+  if(canjeLabel) canjeLabel.textContent=needsTC?'📦 Canje (ARS)':'📦 Canje';
+}
+function calcCanjeUSD(){
+  var canje=parseFloat(document.getElementById('fact-canje')?.value)||0;
+  var tc=parseFloat(document.getElementById('fact-tipo-cambio')?.value)||0;
+  var display=document.getElementById('fact-canje-usd');
+  if(!display) return;
+  if(canje>0&&tc>0){
+    var usd=(canje/tc);
+    display.value='USD '+usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  } else {
+    display.value='';
+  }
 }
 function _actualizarSelectorParteFactura(c){
   var fg=document.getElementById('fact-parte-canje-fg');
@@ -4342,6 +4450,7 @@ function onFactCanjeChange(){
   var id=document.getElementById('fact-contrato-sel')?.value||contratoDetalleId;
   var c=DB.contratos.find(function(x){ return x.id===id; });
   _actualizarSelectorParteFactura(c);
+  calcCanjeUSD();
 }
 
 function openNuevaFactura(){
@@ -4361,9 +4470,12 @@ function openNuevaFactura(){
   document.getElementById('fact-ctacte').value='';
   document.getElementById('fact-cae').value='';
   document.getElementById('fact-obs').value='';
+  var tcEl=document.getElementById('fact-tipo-cambio'); if(tcEl) tcEl.value='';
+  var usdEl=document.getElementById('fact-canje-usd'); if(usdEl) usdEl.value='';
   // Ocultar selector de parte hasta que se ingrese canje
   var fg=document.getElementById('fact-parte-canje-fg');
   if(fg) fg.style.display='none';
+  _updateFactTCSection(c);
   openModal('modal-factura');
 }
 
@@ -4382,7 +4494,10 @@ async function guardarFactura(){
   var montoNeto=parseFloat(document.getElementById('fact-monto-neto').value)||0;
   var iva=parseFloat(document.getElementById('fact-iva').value)||0;
   var total=parseFloat(document.getElementById('fact-total').value)||(montoNeto+iva);
-  var canje=parseFloat(document.getElementById('fact-canje').value)||0;
+  var canjeInput=parseFloat(document.getElementById('fact-canje').value)||0;
+  var tcVal=parseFloat(document.getElementById('fact-tipo-cambio')?.value)||0;
+  var needsTC=c.moneda==='USD'&&tcVal>0;
+  var canje=needsTC?canjeInput/tcVal:canjeInput;
   var ctaCte=parseFloat(document.getElementById('fact-ctacte').value)||0;
   var caeVal=document.getElementById('fact-cae').value.trim()||null;
   var parteCanje=canje>0?(document.getElementById('fact-parte-canje')?.value||''):'';
@@ -4403,10 +4518,13 @@ async function guardarFactura(){
     montoCanje:canje,
     montoCtaCte:ctaCte,
     moneda:c.moneda||'ARS',
+    tipoCambio:tcVal||null,
+    canjeARS:needsTC?canjeInput:null,
     tieneCae:!!caeVal,
     cae:caeVal,
     estado:'Registrada',
-    obs:obsBase||null
+    obs:obsBase||null,
+    cargadoPor:currentUser
   };
   var res;
   if(_facturaEditId){
@@ -4858,7 +4976,7 @@ async function iniciar(){
   llenarSelectProyectos('c-proyecto-sel');
   renderDashboard();
 }
-iniciar();
+// iniciar() se llama desde loginApp() después del login exitoso
 
 // ══════════════════════════════════════════════════════════
 // PRECIOS DE REFERENCIA
